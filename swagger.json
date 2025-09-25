@@ -1,0 +1,39 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "API de Coleta de Dados em Tempo Real",
+    "version": "1.0",
+    "description": "API Flask para coleta e armazenamento de dados em tempo real."
+  },
+  "basePath": "/",
+  "schemes": ["http"],
+  "paths": {
+    
+    "/ibov/scrap": {
+      "post": {
+        "summary": "Faz scraping da carteira IBOV e salva no banco",
+        "responses": {
+          "201": {"description": "Carteira IBOV coletada e salva com sucesso"},
+          "500": {"description": "Erro ao coletar ou salvar"}
+        }
+      }
+    },
+    "/ibov/ativos": {
+      "get": {
+        "summary": "Lista todos os ativos IBOV salvos no banco",
+        "responses": {
+          "200": {"description": "Lista de ativos IBOV"}
+        }
+      }
+    },
+    "/ibov/export/csv": {
+      "get": {
+        "summary": "Exporta todos os ativos IBOV salvos em CSV",
+        "produces": ["text/csv"],
+        "responses": {
+          "200": {"description": "Arquivo CSV gerado"}
+        }
+      }
+    }
+  }
+}

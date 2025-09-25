@@ -1,1 +1,4 @@
 flask
+sqlalchemy
+flask_sqlalchemy
+flask-swagger-ui
