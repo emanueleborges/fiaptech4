@@ -10,28 +10,6 @@ from app.b3scraper import B3Scraper
 bp = Blueprint('main', __name__)
 
 # Endpoint para exportar ativos IBOV em CSV
-@bp.route('/ibov/export/csv', methods=['GET'])
-def export_ibov_csv():
-    ativos = IbovAtivo.query.order_by(IbovAtivo.participacao.desc()).all()
-    data = [
-        {
-            'id': a.id,
-            'codigo': a.codigo,
-            'nome': a.nome,
-            'tipo': a.tipo,
-            'participacao': a.participacao,
-            'data': a.data.isoformat()
-        } for a in ativos
-    ]
-    df = pd.DataFrame(data)
-    output = io.StringIO()
-    df.to_csv(output, index=False)
-    output.seek(0)
-    return Response(
-        output,
-        mimetype='text/csv',
-        headers={"Content-Disposition": "attachment;filename=ibov_ativos.csv"}
-    )
 
 
 @bp.route('/ibov/scrap', methods=['POST'])

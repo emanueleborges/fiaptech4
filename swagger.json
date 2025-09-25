@@ -25,15 +25,6 @@
           "200": {"description": "Lista de ativos IBOV"}
         }
       }
-    },
-    "/ibov/export/csv": {
-      "get": {
-        "summary": "Exporta todos os ativos IBOV salvos em CSV",
-        "produces": ["text/csv"],
-        "responses": {
-          "200": {"description": "Arquivo CSV gerado"}
-        }
-      }
     }
   }
 }
