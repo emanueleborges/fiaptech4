@@ -1,5 +1,5 @@
 
-from .extensions import db
+from app.utils.extensions import db
 from datetime import datetime
 
 class IbovAtivo(db.Model):

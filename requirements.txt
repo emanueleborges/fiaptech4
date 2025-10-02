@@ -2,3 +2,8 @@ flask
 sqlalchemy
 flask_sqlalchemy
 flask-swagger-ui
+apscheduler
+requests
+beautifulsoup4
+urllib3
+pandas
