@@ -112,29 +112,12 @@ def treinar_modelo():
         if response.status_code == 200:
             data = response.json()
             
-            # Criar gráfico das métricas
-            metricas = ['Acurácia', 'Precision', 'Recall', 'F1-Score']
-            valores = [float(data['acuracia']), float(data['precision']), float(data['recall']), float(data['f1_score'])]
-            
-            fig = px.bar(
-                x=metricas,
-                y=valores,
-                title='Métricas do Modelo Treinado',
-                color=valores,
-                color_continuous_scale='viridis'
-            )
-            fig.update_layout(
-                yaxis=dict(tickformat='.1%', range=[0, 1]),
-                xaxis_title="Métricas",
-                yaxis_title="Score"
-            )
-            
             mensagem = f"✅ {data['message']}\n📊 Acurácia: {float(data['acuracia']):.1%}\n🎯 F1-Score: {float(data['f1_score']):.1%}"
-            return mensagem, fig
+            return mensagem
         else:
-            return f"❌ Erro ao treinar modelo: {response.text}", None
+            return f"❌ Erro ao treinar modelo: {response.text}"
     except Exception as e:
-        return f"❌ Erro: {str(e)}", None
+        return f"❌ Erro: {str(e)}"
 
 
 def fazer_predicoes():
@@ -178,38 +161,6 @@ def fazer_predicoes():
     
     except Exception as e:
         return None, f"❌ Erro: {str(e)}", None
-
-
-def obter_metricas():
-    """Obtém métricas do modelo"""
-    try:
-        response = requests.get(f"{API_BASE}/ml/metricas")
-        if response.status_code == 200:
-            data = response.json()
-            
-            # Criar gráfico das métricas
-            metricas = list(data['metricas'].keys())
-            valores = [float(v) for v in data['metricas'].values()]
-            
-            fig = px.bar(
-                x=metricas,
-                y=valores,
-                title='Métricas Atuais do Modelo',
-                color=valores,
-                color_continuous_scale='plasma'
-            )
-            fig.update_layout(
-                yaxis=dict(tickformat='.1%', range=[0, 1]),
-                xaxis_title="Métricas",
-                yaxis_title="Score"
-            )
-            
-            mensagem = f"📊 **{data['status']}**\n🕒 Última atualização: {data['ultima_atualizacao']}"
-            return mensagem, fig
-        else:
-            return f"❌ Erro ao buscar métricas: {response.text}", None
-    except Exception as e:
-        return f"❌ Erro: {str(e)}", None
 
 
 # Interface Gradio COMPLETA
@@ -274,11 +225,9 @@ with gr.Blocks(title="IBOVESPA + ML - Sistema Completo", theme=gr.themes.Soft())
         btn_treinar = gr.Button("🤖 Treinar Modelo ML", variant="primary", size="lg")
         status_treino = gr.Textbox(label="Status do Treinamento", interactive=False)
         
-        grafico_treino = gr.Plot(label="📊 Métricas do Modelo")
-        
         btn_treinar.click(
             fn=treinar_modelo,
-            outputs=[status_treino, grafico_treino]
+            outputs=[status_treino]
         )
     
     with gr.Tab("🎯 Fazer Predições"):
@@ -298,30 +247,17 @@ with gr.Blocks(title="IBOVESPA + ML - Sistema Completo", theme=gr.themes.Soft())
             fn=fazer_predicoes,
             outputs=[tabela_pred, status_pred, grafico_pred]
         )
-    
-    with gr.Tab("📊 Métricas do Modelo"):
-        gr.Markdown("### Visualizar métricas do modelo ativo")
-        
-        btn_metricas = gr.Button("📊 Obter Métricas", variant="secondary")
-        status_metricas = gr.Textbox(label="Status", interactive=False)
-        
-        grafico_metricas = gr.Plot(label="📊 Métricas Atuais")
-        
-        btn_metricas.click(
-            fn=obter_metricas,
-            outputs=[status_metricas, grafico_metricas]
-        )
 
 if __name__ == "__main__":
     print("🚀 Iniciando Interface Gradio COMPLETA...")
     print("🔗 Conectando com API Flask em http://127.0.0.1:5000")
-    print("📊 Interface disponível em: http://127.0.0.1:7863")
+    print("📊 Interface disponível em: http://127.0.0.1:7860")
     print("")
     print("⚠️  IMPORTANTE: Execute 'python app.py' primeiro!")
     
     demo.launch(
         server_name="127.0.0.1", 
-        server_port=7863,
+        server_port=7860,
         share=False,
         debug=False
     )
