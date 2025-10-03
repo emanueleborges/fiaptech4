@@ -3,14 +3,7 @@
 
 ### 📋 Descrição do Projeto
 
-Este projeto implementa um sistema completo de Machine Learning para análise e predição de ativos do IBOVESPA, desenvolvido como parte do **FIAP Tech Challenge - Fase 3**. O sistema oferece uma solução end-to-end que inclui:
-
-- 🕷️ **Web Scraping** automatizado de dados do B3
-- 🔧 **Refinamento e engenharia** de features para ML
-- 🤖 **Treinamento** de modelos de Machine Learning
-- 🔮 **Predições** e recomendações de investimento
-- 📊 **Dashboard interativo** profissional com Gradio
-
+Este projeto implementa um sistema completo de Machine Learning para análise e predição de ativos do IBOVESPA, desenvolvido como parte do **FIAP Tech Challenge - Fase 3**.
 ---
 
 ## 🚀 Como Instalar e Executar
@@ -24,7 +17,7 @@ Este projeto implementa um sistema completo de Machine Learning para análise e 
 ### 📦 Passo 1: Clonar o Repositório
 
 ```bash
-git clone <URL_DO_SEU_REPOSITORIO>
+git clone https://github.com/emanueleborges/fiaptech3
 cd desafio3-fiap
 ```
 
