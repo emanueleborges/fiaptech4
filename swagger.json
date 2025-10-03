@@ -1,28 +1,745 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "API de Coleta de Dados em Tempo Real",
-    "version": "1.0",
-    "description": "API Flask para coleta e armazenamento de dados em tempo real."
+    "title": "API IBOVESPA - Sistema de Coleta e Machine Learning",
+    "version": "2.0.0",
+    "description": "API Flask completa para coleta de dados do IBOVESPA, refinamento, treinamento de modelos ML e predições. Desenvolvida para FIAP Tech Challenge - Fase 3.",
+    "contact": {
+      "name": "FIAP Tech Challenge",
+      "url": "https://github.com/emanueleborges/fiaptech3"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
   },
+  "host": "127.0.0.1:5000",
   "basePath": "/",
   "schemes": ["http"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "tags": [
+    {
+      "name": "IBOV",
+      "description": "Endpoints para coleta e consulta de dados do IBOVESPA"
+    },
+    {
+      "name": "Machine Learning",
+      "description": "Endpoints para refinamento, treinamento e predições ML"
+    },
+    {
+      "name": "Sistema",
+      "description": "Endpoints de sistema e documentação"
+    }
+  ],
   "paths": {
-    
+    "/": {
+      "get": {
+        "tags": ["Sistema"],
+        "summary": "Página inicial da API",
+        "description": "Retorna informações básicas sobre a API e links úteis",
+        "responses": {
+          "200": {
+            "description": "Informações da API",
+            "schema": {
+              "type": "string",
+              "example": "API Flask pronta para coletar dados em tempo real!"
+            }
+          }
+        }
+      }
+    },
     "/ibov/scrap": {
       "post": {
-        "summary": "Faz scraping da carteira IBOV e salva no banco",
+        "tags": ["IBOV"],
+        "summary": "Fazer scraping da carteira IBOVESPA",
+        "description": "Coleta dados atualizados da composição do IBOVESPA diretamente do site da B3, limpa a tabela anterior e salva os novos dados no banco SQLite",
         "responses": {
-          "201": {"description": "Carteira IBOV coletada e salva com sucesso"},
-          "500": {"description": "Erro ao coletar ou salvar"}
+          "201": {
+            "description": "Carteira IBOV coletada e salva com sucesso",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "mensagem": {
+                  "type": "string",
+                  "example": "Carteira IBOV coletada e salva com sucesso!"
+                },
+                "total": {
+                  "type": "integer",
+                  "example": 82,
+                  "description": "Número de ativos coletados"
+                },
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time",
+                  "example": "2025-10-02T15:30:00Z"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro ao coletar ou salvar dados",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "erro": {
+                  "type": "string",
+                  "example": "Erro ao fazer scraping: Connection timeout"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/ibov/ativos": {
       "get": {
-        "summary": "Lista todos os ativos IBOV salvos no banco",
+        "tags": ["IBOV"],
+        "summary": "Listar ativos IBOVESPA salvos",
+        "description": "Retorna todos os ativos da carteira IBOVESPA salvos no banco de dados com suas informações detalhadas",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "description": "Número máximo de ativos a retornar (padrão: todos)",
+            "required": false
+          },
+          {
+            "name": "codigo",
+            "in": "query",
+            "type": "string",
+            "description": "Filtrar por código específico (ex: PETR4)",
+            "required": false
+          }
+        ],
         "responses": {
-          "200": {"description": "Lista de ativos IBOV"}
+          "200": {
+            "description": "Lista de ativos IBOV com sucesso",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "example": 1
+                  },
+                  "codigo": {
+                    "type": "string",
+                    "example": "PETR4",
+                    "description": "Código do ativo na B3"
+                  },
+                  "nome": {
+                    "type": "string",
+                    "example": "PETROBRAS PN",
+                    "description": "Nome completo do ativo"
+                  },
+                  "tipo": {
+                    "type": "string",
+                    "example": "PN",
+                    "description": "Tipo da ação (ON, PN, UNT)"
+                  },
+                  "qtde_teorica": {
+                    "type": "integer",
+                    "example": 1000000,
+                    "description": "Quantidade teórica na carteira"
+                  },
+                  "participacao": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 12.5,
+                    "description": "Percentual de participação no índice"
+                  },
+                  "data": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2025-10-02",
+                    "description": "Data da coleta"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro ao buscar ativos",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "erro": {
+                  "type": "string",
+                  "example": "Erro ao buscar ativos: Database connection failed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ml/refinar": {
+      "post": {
+        "tags": ["Machine Learning"],
+        "summary": "Refinar dados para Machine Learning",
+        "description": "Processa os dados brutos do IBOVESPA, calcula features (participação, variação, média móvel, volatilidade) e salva na tabela 'dados_refinados' pronta para treinamento ML",
+        "responses": {
+          "201": {
+            "description": "Dados refinados com sucesso",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "mensagem": {
+                  "type": "string",
+                  "example": "Dados refinados com sucesso!"
+                },
+                "total_processado": {
+                  "type": "integer",
+                  "example": 82,
+                  "description": "Número de ativos processados"
+                },
+                "total_salvos": {
+                  "type": "integer",
+                  "example": 82,
+                  "description": "Número de registros salvos"
+                },
+                "features_calculadas": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": ["participacao_pct", "variacao_percentual", "media_movel_7d", "volatilidade", "tipo_on", "tipo_pn"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Erro no refinamento - dados insuficientes",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "erro": {
+                  "type": "string",
+                  "example": "Nenhum ativo encontrado. Execute o scraping primeiro."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno no refinamento",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "erro": {
+                  "type": "string",
+                  "example": "Erro ao calcular features: Division by zero"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ml/dados-refinados": {
+      "get": {
+        "tags": ["Machine Learning"],
+        "summary": "Listar dados refinados",
+        "description": "Retorna todos os dados processados e prontos para Machine Learning, incluindo features calculadas e recomendações",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "description": "Número máximo de registros (padrão: todos)",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dados refinados encontrados",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "total": {
+                  "type": "integer",
+                  "example": 82
+                },
+                "dados": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "codigo": {
+                        "type": "string",
+                        "example": "PETR4"
+                      },
+                      "nome": {
+                        "type": "string",
+                        "example": "PETROBRAS PN"
+                      },
+                      "participacao_pct": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 12.5
+                      },
+                      "variacao_percentual": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 2.3
+                      },
+                      "media_movel_7d": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 35.2
+                      },
+                      "volatilidade": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 1.8
+                      },
+                      "recomendacao": {
+                        "type": "string",
+                        "enum": ["COMPRAR", "VENDER"],
+                        "example": "COMPRAR"
+                      },
+                      "data_atualizacao": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2025-10-02 15:00:00"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro ao listar dados refinados"
+          }
+        }
+      }
+    },
+    "/ml/treinar": {
+      "post": {
+        "tags": ["Machine Learning"],
+        "summary": "Treinar modelo de Machine Learning",
+        "description": "Treina um modelo Random Forest com os dados refinados para predição de recomendações COMPRAR/VENDER",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Parâmetros opcionais para treinamento",
+            "required": false,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "algoritmo": {
+                  "type": "string",
+                  "enum": ["RandomForest", "LogisticRegression", "SVM"],
+                  "default": "RandomForest",
+                  "description": "Algoritmo a ser usado"
+                },
+                "test_size": {
+                  "type": "number",
+                  "format": "float",
+                  "default": 0.2,
+                  "description": "Proporção para teste (0.1 a 0.4)"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Modelo treinado com sucesso",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "mensagem": {
+                  "type": "string",
+                  "example": "Modelo treinado com sucesso!"
+                },
+                "versao": {
+                  "type": "string",
+                  "example": "20251002_150000",
+                  "description": "Versão do modelo (timestamp)"
+                },
+                "algoritmo": {
+                  "type": "string",
+                  "example": "RandomForest"
+                },
+                "metricas": {
+                  "type": "object",
+                  "properties": {
+                    "acuracia": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0.875
+                    },
+                    "precision": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0.857
+                    },
+                    "recall": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0.900
+                    },
+                    "f1_score": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0.878
+                    }
+                  }
+                },
+                "caminho_modelo": {
+                  "type": "string",
+                  "example": "modelos/modelo_20251002_150000.pkl"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dados insuficientes para treinamento",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "erro": {
+                  "type": "string",
+                  "example": "Dados refinados insuficientes. Execute o refinamento primeiro."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro no treinamento"
+          }
+        }
+      }
+    },
+    "/ml/prever": {
+      "post": {
+        "tags": ["Machine Learning"],
+        "summary": "Fazer predições (individual ou em lote)",
+        "description": "Realiza predições usando o modelo treinado. Aceita um código único ou lista de códigos para predição em lote",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "description": "Código(s) para predição",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "codigo": {
+                      "type": "string",
+                      "example": "PETR4",
+                      "description": "Código único para predição individual"
+                    }
+                  },
+                  "required": ["codigo"]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "codigos": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": ["PETR4", "VALE3", "ITUB4"],
+                      "description": "Lista de códigos para predição em lote"
+                    }
+                  },
+                  "required": ["codigos"]
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Predição realizada com sucesso",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "description": "Resposta para predição individual",
+                  "properties": {
+                    "codigo": {
+                      "type": "string",
+                      "example": "PETR4"
+                    },
+                    "nome": {
+                      "type": "string",
+                      "example": "PETROBRAS PN"
+                    },
+                    "recomendacao": {
+                      "type": "string",
+                      "enum": ["COMPRAR", "VENDER"],
+                      "example": "COMPRAR"
+                    },
+                    "confianca": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 85.5,
+                      "description": "Nível de confiança da predição (0-100)"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "description": "Resposta para predição em lote",
+                  "properties": {
+                    "total": {
+                      "type": "integer",
+                      "example": 3
+                    },
+                    "predicoes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "codigo": {
+                            "type": "string",
+                            "example": "PETR4"
+                          },
+                          "recomendacao": {
+                            "type": "string",
+                            "example": "COMPRAR"
+                          },
+                          "confianca": {
+                            "type": "number",
+                            "format": "float",
+                            "example": 85.5
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "400": {
+            "description": "Dados de entrada inválidos",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "erro": {
+                  "type": "string",
+                  "example": "Forneça 'codigo' (string) ou 'codigos' (lista)"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ativo não encontrado",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "erro": {
+                  "type": "string",
+                  "example": "Ativo PETR4 não encontrado nos dados refinados"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro na predição"
+          }
+        }
+      }
+    },
+    "/ml/metricas": {
+      "get": {
+        "tags": ["Machine Learning"],
+        "summary": "Obter métricas do modelo ativo",
+        "description": "Retorna as métricas de performance do último modelo treinado, incluindo informações sobre o dataset e histórico",
+        "responses": {
+          "200": {
+            "description": "Métricas encontradas",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "modelo_ativo": {
+                  "type": "object",
+                  "properties": {
+                    "versao": {
+                      "type": "string",
+                      "example": "20251002_150000"
+                    },
+                    "algoritmo": {
+                      "type": "string",
+                      "example": "RandomForest"
+                    },
+                    "data_treinamento": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2025-10-02T15:00:00Z"
+                    }
+                  }
+                },
+                "metricas": {
+                  "type": "object",
+                  "properties": {
+                    "acuracia": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0.875
+                    },
+                    "precision": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0.857
+                    },
+                    "recall": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0.900
+                    },
+                    "f1_score": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0.878
+                    }
+                  }
+                },
+                "dataset": {
+                  "type": "object",
+                  "properties": {
+                    "total_amostras": {
+                      "type": "integer",
+                      "example": 82
+                    },
+                    "amostras_treino": {
+                      "type": "integer",
+                      "example": 65
+                    },
+                    "amostras_teste": {
+                      "type": "integer",
+                      "example": 17
+                    }
+                  }
+                },
+                "historico": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "versao": {
+                        "type": "string"
+                      },
+                      "acuracia": {
+                        "type": "number",
+                        "format": "float"
+                      },
+                      "data": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Nenhum modelo treinado encontrado",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "erro": {
+                  "type": "string",
+                  "example": "Nenhum modelo foi treinado ainda. Execute /ml/treinar primeiro."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro ao obter métricas"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Ativo": {
+      "type": "object",
+      "properties": {
+        "codigo": {
+          "type": "string",
+          "description": "Código do ativo (ex: PETR4)"
+        },
+        "nome": {
+          "type": "string",
+          "description": "Nome completo do ativo"
+        },
+        "tipo": {
+          "type": "string",
+          "description": "Tipo da ação (ON, PN, UNT)"
+        },
+        "participacao": {
+          "type": "number",
+          "format": "float",
+          "description": "Percentual no IBOVESPA"
+        }
+      }
+    },
+    "DadoRefinado": {
+      "type": "object",
+      "properties": {
+        "codigo": {
+          "type": "string"
+        },
+        "features": {
+          "type": "object",
+          "properties": {
+            "participacao_pct": {
+              "type": "number",
+              "format": "float"
+            },
+            "variacao_percentual": {
+              "type": "number",
+              "format": "float"
+            },
+            "volatilidade": {
+              "type": "number",
+              "format": "float"
+            }
+          }
+        },
+        "recomendacao": {
+          "type": "string",
+          "enum": ["COMPRAR", "VENDER"]
+        }
+      }
+    },
+    "Predicao": {
+      "type": "object",
+      "properties": {
+        "codigo": {
+          "type": "string"
+        },
+        "recomendacao": {
+          "type": "string",
+          "enum": ["COMPRAR", "VENDER"]
+        },
+        "confianca": {
+          "type": "number",
+          "format": "float",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "Erro": {
+      "type": "object",
+      "properties": {
+        "erro": {
+          "type": "string",
+          "description": "Mensagem de erro detalhada"
         }
       }
     }

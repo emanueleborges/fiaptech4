@@ -12,6 +12,10 @@ from app.services.b3_scraper_service import B3Scraper
 from app.utils.extensions import db
 from app.routes.routes import bp as main_bp
 
+# Importar modelos para criar tabelas
+from app.models.ibov_model import IbovAtivo
+from app.models.dados_refinados_model import DadosRefinados
+
 
 def create_app():
     """Factory para criar e configurar a aplicação Flask"""
