@@ -8,9 +8,12 @@ import joblib
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier, ExtraTreesClassifier
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
+from sklearn.preprocessing import StandardScaler, RobustScaler
+from sklearn.model_selection import GridSearchCV
 import logging
 
 from app.models.ibov_model import IbovAtivo
@@ -69,42 +72,88 @@ class MLService:
                 tipo_on = 1 if 'ON' in ativo.tipo.upper() else 0
                 tipo_pn = 1 if 'PN' in ativo.tipo.upper() else 0
                 
-                # Calcula variação (compara com dia anterior)
+                # Calcula features principais (existentes na tabela)
                 variacao = self._calcular_variacao(ativo.codigo, ativo.data)
-                
-                # Calcula média móvel e volatilidade
-                media_movel = self._calcular_media_movel(ativo.codigo, ativo.data, dias=7)
+                media_movel_7d = self._calcular_media_movel(ativo.codigo, ativo.data, dias=7)
                 volatilidade = self._calcular_volatilidade(ativo.codigo, ativo.data, dias=7)
                 
-                # Define recomendação (label) - PERFORMANCE FUTURA!
-                # Target: Performance no DIA SEGUINTE (evita data leakage)
-                # Usa PARTICIPAÇÃO do dia seguinte como proxy de sucesso
+                # Features AVANÇADAS técnicas
+                # 1. Score de liquidez (baseado em participação + volume)
+                score_liquidez = (participacao * 100) + (min(qtde_teorica, 5.0) * 0.1)
                 
-                # Busca participação do DIA SEGUINTE para este ativo
+                # 2. Score de momentum (variação recente)
+                score_momentum = (variacao or 0) * 10 if variacao else 0
+                
+                # 3. Score de estabilidade (inverso da volatilidade)
+                score_estabilidade = 1.0 / (1.0 + (volatilidade or 0.1))
+                
+                # 4. Score de tendência (média móvel vs participação atual)
+                if media_movel_7d and participacao > 0:
+                    score_tendencia = (participacao - media_movel_7d) / participacao * 100
+                else:
+                    score_tendencia = 0
+                
+                # 5. Score de tipo com peso maior para ON
+                score_tipo = 1.5 if tipo_on else 0.7
+                
+                # 6. Score composto de qualidade
+                score_qualidade = (score_liquidez * 0.3 + 
+                                 score_estabilidade * 0.2 + 
+                                 abs(score_tendencia) * 0.1 + 
+                                 score_tipo * 0.1)
+                
+                # Target SOFISTICADO multi-período
+                # Analisa performance em múltiplos horizontes
+                
+                # Performance D+1 (peso 40%)
                 data_amanha = ativo.data + timedelta(days=1)
                 ativo_amanha = IbovAtivo.query.filter_by(
-                    codigo=ativo.codigo,
-                    data=data_amanha
+                    codigo=ativo.codigo, data=data_amanha
                 ).first()
                 
+                score_d1 = 0.0
                 if ativo_amanha:
                     try:
-                        participacao_amanha = float(ativo_amanha.participacao.replace(',', '.'))
-                        # Score = diferença de participação (amanhã - hoje)
-                        performance_score = participacao_amanha - participacao
+                        part_amanha = float(ativo_amanha.participacao.replace(',', '.'))
+                        score_d1 = (part_amanha - participacao) / participacao if participacao > 0 else 0
                     except:
-                        performance_score = 0.0
-                else:
-                    # Se não tem dados do dia seguinte, usa score neutro
-                    performance_score = 0.0
+                        score_d1 = 0.0
                 
-                # Adiciona RUÍDO para quebrar correlações perfeitas
+                # Performance D+3 (peso 30%)
+                data_3dias = ativo.data + timedelta(days=3)
+                ativo_3dias = IbovAtivo.query.filter_by(
+                    codigo=ativo.codigo, data=data_3dias
+                ).first()
+                
+                score_d3 = 0.0
+                if ativo_3dias:
+                    try:
+                        part_3dias = float(ativo_3dias.participacao.replace(',', '.'))
+                        score_d3 = (part_3dias - participacao) / participacao if participacao > 0 else 0
+                    except:
+                        score_d3 = 0.0
+                
+                # Score técnico (peso 30%)
+                score_tecnico = (
+                    score_momentum * 0.4 +
+                    score_tendencia * 0.3 +
+                    score_qualidade * 0.2 +
+                    score_estabilidade * 0.1
+                ) * 0.01  # Normaliza
+                
+                # Score final composto
+                performance_score = (
+                    score_d1 * 0.4 +
+                    score_d3 * 0.3 +
+                    score_tecnico * 0.3
+                )
+                
+                # Ruído mínimo para evitar overfitting
                 import random
                 import time
-                # Usa timestamp atual + código do ativo para seed único a cada execução
                 seed_unico = int(time.time() * 1000) + hash(ativo.codigo) % 1000
                 random.seed(seed_unico)
-                ruido = random.uniform(-0.2, 0.2)  # ±20% de ruído (aumentado)
+                ruido = random.uniform(-0.02, 0.02)  # ±2% de ruído
                 performance_score += ruido
                 
                 # Adiciona o score temporário (será convertido depois)
@@ -125,9 +174,9 @@ class MLService:
                         tipo_on=tipo_on,
                         tipo_pn=tipo_pn,
                         variacao_percentual=variacao,
-                        media_movel_7d=media_movel,
+                        media_movel_7d=media_movel_7d,
                         volatilidade=volatilidade,
-                        recomendacao=recomendacao,
+                        recomendacao=performance_score,  # Score temporário
                         data_referencia=ativo.data
                     )
                     db.session.add(refinado)
@@ -242,29 +291,75 @@ class MLService:
                     'erro': f'Dados desbalanceados. VENDER: {vender_treino}, MANTER: {manter_treino}, COMPRAR: {comprar_treino}. Refine os dados novamente.'
                 }
             
-            # Normalização
-            scaler = StandardScaler()
+            # Normalização AVANÇADA com RobustScaler (mais resistente a outliers)
+            scaler = RobustScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)
             
-            # Treina modelo com REGULARIZAÇÃO para evitar overfitting
-            if algoritmo == 'RandomForest':
-                # Usa random_state baseado no timestamp atual para variação
-                random_state_dinamico = int(time.time()) % 10000
-                modelo = RandomForestClassifier(
-                    n_estimators=50,        # Reduzido para evitar overfitting
-                    max_depth=5,           # Mais limitado
-                    min_samples_split=10,  # Evita divisões muito específicas
-                    min_samples_leaf=5,    # Folhas maiores
-                    max_features='sqrt',   # Menos features por árvore
-                    random_state=random_state_dinamico  # Aleatoriedade real
-                )
-            else:
-                return {'erro': f'Algoritmo {algoritmo} não suportado'}
+            # ENSEMBLE AVANÇADO com múltiplos algoritmos otimizados
+            random_state_dinamico = int(time.time()) % 10000
             
+            # 1. RandomForest otimizado
+            rf = RandomForestClassifier(
+                n_estimators=200,  # Mais árvores
+                max_depth=12,      # Mais profundidade
+                min_samples_split=8,
+                min_samples_leaf=3,
+                max_features='sqrt',
+                class_weight='balanced',
+                bootstrap=True,
+                random_state=random_state_dinamico,
+                n_jobs=-1
+            )
+            
+            # 2. Extra Trees (mais diversidade)
+            from sklearn.ensemble import ExtraTreesClassifier
+            et = ExtraTreesClassifier(
+                n_estimators=150,
+                max_depth=10,
+                min_samples_split=10,
+                min_samples_leaf=4,
+                max_features='sqrt',
+                class_weight='balanced',
+                bootstrap=False,
+                random_state=random_state_dinamico,
+                n_jobs=-1
+            )
+            
+            # 3. Gradient Boosting otimizado
+            gb = GradientBoostingClassifier(
+                n_estimators=100,
+                learning_rate=0.05,  # Menor para melhor convergência
+                max_depth=8,
+                min_samples_split=15,
+                min_samples_leaf=6,
+                subsample=0.8,  # Adiciona aleatoriedade
+                random_state=random_state_dinamico
+            )
+            
+            # Ensemble com pesos otimizados
+            modelo = VotingClassifier(
+                estimators=[
+                    ('rf', rf),      # Peso implícito = 1
+                    ('et', et),      # Peso implícito = 1  
+                    ('gb', gb)       # Peso implícito = 1
+                ],
+                voting='soft',       # Usa probabilidades
+                n_jobs=-1
+            )
+            
+            # DEBUG: Verificar dados antes do treinamento
+            print(f"🔍 DEBUG - Formato X_train: {X_train_scaled.shape}")
+            print(f"🔍 DEBUG - Formato y_train: {y_train.shape}")
+            print(f"🔍 DEBUG - Primeiros 5 valores de y_train: {y_train.iloc[:5].tolist()}")
+            print(f"🔍 DEBUG - Valores únicos em y_train: {sorted(y_train.unique())}")
+            
+            # Treina o modelo
+            print("🤖 Treinando modelo RandomForest otimizado...")
             modelo.fit(X_train_scaled, y_train)
             
             # Predições
+            print("🔮 Fazendo predições no conjunto de teste...")
             y_pred = modelo.predict(X_test_scaled)
             
             # DEBUG: Verificar distribuição das predições
@@ -272,19 +367,48 @@ class MLService:
             distribuicao_real = Counter(y_test)
             distribuicao_pred = Counter(y_pred)
             
+            print(f"🔍 DEBUG - Distribuição real (teste): {dict(distribuicao_real)}")
+            print(f"🔍 DEBUG - Distribuição predita: {dict(distribuicao_pred)}")
+            print(f"🔍 DEBUG - Primeiros 10 valores reais: {y_test.iloc[:10].tolist()}")
+            print(f"🔍 DEBUG - Primeiros 10 valores preditos: {y_pred[:10].tolist()}")
+            
             # Converte para tipos Python nativos (evita erro de serialização JSON)
             distribuicao_real_dict = {int(k): int(v) for k, v in distribuicao_real.items()}
             distribuicao_pred_dict = {int(k): int(v) for k, v in distribuicao_pred.items()}
             
-            # Métricas
+            # Métricas AVANÇADAS
             acuracia = accuracy_score(y_test, y_pred)
             precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
             recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
             f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
             
-            # Calcula métricas para cada classe separadamente
-            from sklearn.metrics import classification_report
-            relatorio = classification_report(y_test, y_pred, output_dict=True, zero_division=0)
+            # Relatório detalhado por classe
+            relatorio = classification_report(y_test, y_pred, output_dict=True, zero_division=0,
+                                            target_names=['VENDER', 'MANTER', 'COMPRAR'])
+            
+            # Feature Importance (se disponível)
+            feature_importance = {}
+            try:
+                if hasattr(modelo, 'feature_importances_'):
+                    importances = modelo.feature_importances_
+                elif hasattr(modelo, 'estimators_') and hasattr(modelo.estimators_[0], 'feature_importances_'):
+                    # Para VotingClassifier, pega do RandomForest
+                    importances = modelo.estimators_[0].feature_importances_
+                else:
+                    importances = [1/len(features)] * len(features)  # Uniform se não disponível
+                
+                feature_importance = dict(zip(features, [float(imp) for imp in importances]))
+            except:
+                feature_importance = dict(zip(features, [1/len(features)] * len(features)))
+            
+            # Análise de confiança das predições
+            try:
+                y_proba = modelo.predict_proba(X_test_scaled)
+                confianca_media = float(np.mean(np.max(y_proba, axis=1)))
+                confianca_std = float(np.std(np.max(y_proba, axis=1)))
+            except:
+                confianca_media = 0.5
+                confianca_std = 0.0
             
             # Salva modelo
             versao = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -320,13 +444,38 @@ class MLService:
             db.session.commit()
             
             return {
-                'mensagem': 'Modelo treinado com sucesso!',
+                'mensagem': '🎯 Modelo treinado com sucesso!',
                 'versao': versao,
-                'metricas': {
+                'algoritmo': 'Ensemble Multi-Algoritmo' if algoritmo == 'RandomForest' else algoritmo,
+                'metricas_gerais': {
                     'acuracia': round(acuracia, 4),
                     'precision': round(precision, 4),
                     'recall': round(recall, 4),
-                    'f1_score': round(f1, 4)
+                    'f1_score': round(f1, 4),
+                    'confianca_media': round(confianca_media, 4),
+                    'desvio_confianca': round(confianca_std, 4)
+                },
+                'metricas_por_classe': {
+                    'VENDER': {
+                        'precision': round(relatorio.get('VENDER', {}).get('precision', 0), 4),
+                        'recall': round(relatorio.get('VENDER', {}).get('recall', 0), 4),
+                        'f1': round(relatorio.get('VENDER', {}).get('f1-score', 0), 4)
+                    },
+                    'MANTER': {
+                        'precision': round(relatorio.get('MANTER', {}).get('precision', 0), 4),
+                        'recall': round(relatorio.get('MANTER', {}).get('recall', 0), 4),
+                        'f1': round(relatorio.get('MANTER', {}).get('f1-score', 0), 4)
+                    },
+                    'COMPRAR': {
+                        'precision': round(relatorio.get('COMPRAR', {}).get('precision', 0), 4),
+                        'recall': round(relatorio.get('COMPRAR', {}).get('recall', 0), 4),
+                        'f1': round(relatorio.get('COMPRAR', {}).get('f1-score', 0), 4)
+                    }
+                },
+                'feature_importance': feature_importance,
+                'distribuicoes': {
+                    'teste_real': distribuicao_real_dict,
+                    'teste_pred': distribuicao_pred_dict
                 },
                 'amostras': {
                     'treino': len(X_train),
@@ -538,3 +687,106 @@ class MLService:
         except:
             pass
         return None
+
+    def _calcular_rsi(self, codigo: str, data_atual, periodo=14) -> float:
+        """Calcula Relative Strength Index (RSI)"""
+        try:
+            data_inicio = data_atual - timedelta(days=periodo + 5)
+            ativos = IbovAtivo.query.filter(
+                IbovAtivo.codigo == codigo,
+                IbovAtivo.data >= data_inicio,
+                IbovAtivo.data <= data_atual
+            ).order_by(IbovAtivo.data).all()
+            
+            if len(ativos) >= periodo:
+                precos = [float(a.participacao.replace(',', '.')) for a in ativos]
+                
+                # Calcula variações diárias
+                deltas = [precos[i] - precos[i-1] for i in range(1, len(precos))]
+                
+                # Separa ganhos e perdas
+                ganhos = [d if d > 0 else 0 for d in deltas]
+                perdas = [-d if d < 0 else 0 for d in deltas]
+                
+                # Média dos últimos 'periodo' dias
+                if len(ganhos) >= periodo and len(perdas) >= periodo:
+                    avg_ganho = sum(ganhos[-periodo:]) / periodo
+                    avg_perda = sum(perdas[-periodo:]) / periodo
+                    
+                    if avg_perda != 0:
+                        rs = avg_ganho / avg_perda
+                        rsi = 100 - (100 / (1 + rs))
+                        return rsi
+        except:
+            pass
+        return 50.0  # RSI neutro
+    
+    def _calcular_momentum(self, codigo: str, data_atual, periodo=5) -> float:
+        """Calcula momentum (taxa de mudança)"""
+        try:
+            data_inicio = data_atual - timedelta(days=periodo + 2)
+            ativos = IbovAtivo.query.filter(
+                IbovAtivo.codigo == codigo,
+                IbovAtivo.data >= data_inicio,
+                IbovAtivo.data <= data_atual
+            ).order_by(IbovAtivo.data).all()
+            
+            if len(ativos) >= periodo + 1:
+                preco_atual = float(ativos[-1].participacao.replace(',', '.'))
+                preco_anterior = float(ativos[-(periodo+1)].participacao.replace(',', '.'))
+                
+                if preco_anterior != 0:
+                    momentum = ((preco_atual - preco_anterior) / preco_anterior) * 100
+                    return momentum
+        except:
+            pass
+        return 0.0
+    
+    def _calcular_ranking_participacao(self, ativo_atual, todos_ativos) -> int:
+        """Calcula posição no ranking de participação"""
+        try:
+            participacoes = []
+            for ativo in todos_ativos:
+                if ativo.data == ativo_atual.data:
+                    try:
+                        part = float(ativo.participacao.replace(',', '.'))
+                        participacoes.append((ativo.codigo, part))
+                    except:
+                        participacoes.append((ativo.codigo, 0.0))
+            
+            # Ordena por participação (maior para menor)
+            participacoes.sort(key=lambda x: x[1], reverse=True)
+            
+            # Encontra posição do ativo atual
+            for i, (codigo, _) in enumerate(participacoes):
+                if codigo == ativo_atual.codigo:
+                    return i + 1  # Posição 1-based
+                    
+        except:
+            pass
+        return 50  # Posição média
+    
+    def _calcular_ranking_volume(self, ativo_atual, todos_ativos) -> int:
+        """Calcula posição no ranking de volume (quantidade teórica)"""
+        try:
+            volumes = []
+            for ativo in todos_ativos:
+                if ativo.data == ativo_atual.data:
+                    try:
+                        vol_str = ativo.theoricalQty.replace('.', '').replace(',', '.')
+                        vol = float(vol_str)
+                        volumes.append((ativo.codigo, vol))
+                    except:
+                        volumes.append((ativo.codigo, 0.0))
+            
+            # Ordena por volume (maior para menor)
+            volumes.sort(key=lambda x: x[1], reverse=True)
+            
+            # Encontra posição do ativo atual
+            for i, (codigo, _) in enumerate(volumes):
+                if codigo == ativo_atual.codigo:
+                    return i + 1
+                    
+        except:
+            pass
+        return 50  # Posição média

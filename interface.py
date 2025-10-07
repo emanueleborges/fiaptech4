@@ -131,8 +131,28 @@ def treinar_modelo():
         response = requests.post(f"{API_BASE}/ml/treinar", json={}, headers={'Content-Type': 'application/json'})
         if response.status_code in [200, 201]:
             data = response.json()
-            metricas = data.get('metricas', {})
-            mensagem = f"✅ {data.get('mensagem', 'Modelo treinado!')}\n📊 Acurácia: {float(metricas.get('acuracia', data.get('acuracia', 0)))*100:.1f}%\n🎯 Precision: {float(metricas.get('precision', data.get('precision', 0)))*100:.1f}%\n🔍 Recall: {float(metricas.get('recall', data.get('recall', 0)))*100:.1f}%\n⚖️ F1-Score: {float(metricas.get('f1_score', data.get('f1_score', 0)))*100:.1f}%"
+            # Tenta pegar métricas da nova estrutura primeiro
+            metricas = data.get('metricas_gerais', data.get('metricas', {}))
+            
+            # Extrai métricas com fallback para estrutura antiga
+            acuracia = float(metricas.get('acuracia', data.get('acuracia', 0)))
+            precision = float(metricas.get('precision', data.get('precision', 0)))
+            recall = float(metricas.get('recall', data.get('recall', 0)))
+            f1_score = float(metricas.get('f1_score', data.get('f1_score', 0)))
+            
+            mensagem = f"✅ {data.get('mensagem', 'Modelo treinado!')}\n📊 Acurácia: {acuracia*100:.1f}%\n🎯 Precision: {precision*100:.1f}%\n🔍 Recall: {recall*100:.1f}%\n⚖️ F1-Score: {f1_score*100:.1f}%"
+            
+            # Adicionar informações extras se disponíveis
+            if 'metricas_por_classe' in data:
+                mensagem += f"\n\n📈 Detalhes por classe:"
+                metricas_classe = data['metricas_por_classe']
+                if 'COMPRAR' in metricas_classe:
+                    mensagem += f"\n🟢 COMPRAR: F1={metricas_classe['COMPRAR']['f1']*100:.1f}%"
+                if 'MANTER' in metricas_classe:
+                    mensagem += f"\n🟡 MANTER: F1={metricas_classe['MANTER']['f1']*100:.1f}%"
+                if 'VENDER' in metricas_classe:
+                    mensagem += f"\n🔴 VENDER: F1={metricas_classe['VENDER']['f1']*100:.1f}%"
+            
             return mensagem
         else:
             return f"❌ Erro ao treinar modelo: {response.text}"
