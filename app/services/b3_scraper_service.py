@@ -13,16 +13,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("app.b3scraper")
 
 class B3Scraper:
-    """
-    Scraper B3 - prioriza JSON interno (indexProxy/indexCall/GetPortfolioDay)
-    HTML é apenas fallback.
-    """
+    
     def __init__(self, bucket_name: str = None):
         self.bucket_name = bucket_name
 
-        # Página “humana” (HTML)
         self.base_page = "https://sistemaswebb3-listados.b3.com.br/indexPage/day/IBOV"
-        # Endpoint real (JSON via Base64 no path)
         self.base_api = "https://sistemaswebb3-listados.b3.com.br/indexProxy/indexCall/GetPortfolioDay"
 
         self.headers_json = {
@@ -40,7 +35,6 @@ class B3Scraper:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         }
 
-        # sessão com retry
         self.session = requests.Session()
         retries = Retry(
             total=3,
@@ -52,10 +46,7 @@ class B3Scraper:
         self.session.mount("http://", HTTPAdapter(max_retries=retries))
 
     def fetch_ibov_data(self, date_str: Optional[str] = None) -> List[Dict]:
-        """
-        Retorna lista de dicts:
-        { cod, asset, type, theoricalQty (str), part (str) }
-        """
+        
         try:
             data = self._get_json_ibov(date_str)
             if data and data.get("results"):
@@ -83,19 +74,9 @@ class B3Scraper:
             logger.error(f"Erro no scraping B3: {e}")
             return []
 
-    # ----------------- Internals -----------------
 
     def _get_json_ibov(self, date_str: Optional[str]) -> Optional[Dict]:
-        """
-        Constrói o payload, codifica em Base64 e chama o endpoint GetPortfolioDay.
-        Campos típicos do payload:
-          - language: 'pt-br'
-          - pageNumber: 1
-          - pageSize: 120   (cobre 82 sem paginação)
-          - index: 'IBOV'
-          - segment: '1'
-          - date: 'DD/MM/YY' ou 'DD/MM/YYYY' (opcional)
-        """
+       
         payload = {
             "language": "pt-br",
             "pageNumber": 1,
@@ -106,7 +87,6 @@ class B3Scraper:
         if date_str:
             payload["date"] = date_str  # ex: "25/09/25" ou "25/09/2025"
 
-        # A B3 aceita o payload como string JSON compacta em Base64
         encoded = base64.b64encode(
             json.dumps(payload, separators=(",", ":")).encode("utf-8")
         ).decode("utf-8")
@@ -116,10 +96,8 @@ class B3Scraper:
         resp = self.session.get(url, headers=self.headers_json, timeout=30)
         resp.raise_for_status()
 
-        # Content-Type costuma vir application/json
         try:
             data = resp.json()
-            # sanidade mínima
             if isinstance(data, dict) and "results" in data:
                 return data
         except ValueError:
@@ -127,9 +105,7 @@ class B3Scraper:
         return None
 
     def _parse_from_html(self) -> List[Dict]:
-        """
-        Fallback: tenta extrair da tabela HTML (se o endpoint JSON falhar).
-        """
+       
         logger.info(f"Fazendo scraping da página HTML: {self.base_page}")
         response = self.session.get(self.base_page, headers=self.headers_html, timeout=30)
         response.raise_for_status()
@@ -165,7 +141,6 @@ class B3Scraper:
             logger.info(f"Extraídos {len(stocks_data)} registros da tabela HTML")
         return stocks_data
 
-    # ======= utilitários opcionais (mantidos) =======
 
     def _parse_number(self, value: str) -> Optional[float]:
         if not value or value.strip() == '':

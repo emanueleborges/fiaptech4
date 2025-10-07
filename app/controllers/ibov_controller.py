@@ -1,7 +1,4 @@
-"""
-Controller - Lógica de negócio dos endpoints IBOV
-Responsável por processar as requisições e retornar respostas
-"""
+
 from datetime import datetime, timedelta
 from flask import jsonify
 from app.models.ibov_model import IbovAtivo
@@ -11,16 +8,10 @@ import time
 
 
 class IbovController:
-    """Controller para operações com ativos IBOV"""
     
     @staticmethod
     def scrap_ibov():
-        """
-        Executa o scraping dos dados do IBOVESPA e salva no banco
-        
-        Returns:
-            tuple: (response_data, status_code)
-        """
+       
         try:
             scraper = B3Scraper()
             ativos = scraper.fetch_ibov_data()
@@ -58,12 +49,7 @@ class IbovController:
     
     @staticmethod
     def listar_ativos():
-        """
-        Lista todos os ativos IBOV salvos no banco
-        
-        Returns:
-            tuple: (response_data, status_code)
-        """
+       
         try:
             ativos = IbovAtivo.query.order_by(IbovAtivo.participacao.desc()).all()
             
@@ -85,15 +71,7 @@ class IbovController:
     
     @staticmethod
     def scrap_historico(meses=6):
-        """
-        Coleta dados históricos do IBOVESPA de múltiplos meses
         
-        Args:
-            meses: Número de meses para coletar (padrão 6)
-            
-        Returns:
-            tuple: (response_data, status_code)
-        """
         try:
             scraper = B3Scraper()
             hoje = datetime.now()
@@ -101,15 +79,13 @@ class IbovController:
             total_dias = 0
             erros = 0
             
-            # Coletar dados dos últimos X meses (apenas dias úteis)
-            for dias_atras in range(0, meses * 30):  # Aproximadamente 6 meses
+            for dias_atras in range(0, meses * 30):  
                 data_alvo = hoje - timedelta(days=dias_atras)
                 
-                # Pular finais de semana
-                if data_alvo.weekday() >= 5:  # 5=sábado, 6=domingo
+                if data_alvo.weekday() >= 5:  
                     continue
                 
-                data_str = data_alvo.strftime('%d/%m/%y')  # Formato: 25/09/25
+                data_str = data_alvo.strftime('%d/%m/%y')  
                 
                 try:
                     print(f"[HISTÓRICO] Coletando {data_str}...", end=" ")
@@ -118,7 +94,6 @@ class IbovController:
                     if ativos:
                         salvos_dia = 0
                         for ativo in ativos:
-                            # Evita duplicidade por código e data
                             existe = IbovAtivo.query.filter_by(
                                 codigo=ativo['cod'], 
                                 data=data_alvo.date()
@@ -144,7 +119,6 @@ class IbovController:
                         print(f"❌ Sem dados")
                         erros += 1
                     
-                    # Pausa para não sobrecarregar servidor B3
                     time.sleep(0.5)
                     
                 except Exception as e_dia:

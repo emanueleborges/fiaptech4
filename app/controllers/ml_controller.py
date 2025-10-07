@@ -1,21 +1,14 @@
-"""
-Controller de Machine Learning
-Gerencia endpoints de ML: refinamento, treinamento, predição e métricas
-"""
+
 from flask import jsonify, request
 from app.services.ml_service import MLService
 from app.models.dados_refinados_model import DadosRefinados
 
 
 class MLController:
-    """Controller para operações de Machine Learning"""
     
     @staticmethod
     def refinar_dados():
-        """
-        POST /ml/refinar
-        Refina dados brutos e prepara features para ML
-        """
+       
         try:
             ml_service = MLService()
             resultado = ml_service.refinar_dados()
@@ -29,10 +22,7 @@ class MLController:
             return jsonify({'erro': str(e)}), 500
     
     def listar_dados_refinados(self):
-        """
-        GET /ml/dados-refinados
-        Lista todos os dados refinados salvos no banco SQLite
-        """
+        
         try:
             dados = DadosRefinados.query.all()
             
@@ -58,10 +48,7 @@ class MLController:
     
     @staticmethod
     def treinar_modelo():
-        """
-        POST /ml/treinar
-        Treina novo modelo de Machine Learning
-        """
+       
         try:
             # Pode receber parâmetros no body
             data = request.get_json() or {}
@@ -80,10 +67,7 @@ class MLController:
     
     @staticmethod
     def prever(codigo):
-        """
-        POST /ml/prever
-        Faz predição para uma ação
-        """
+        
         try:
             ml_service = MLService()
             resultado = ml_service.prever(codigo.upper())
@@ -98,10 +82,7 @@ class MLController:
     
     @staticmethod
     def obter_metricas():
-        """
-        GET /ml/metricas
-        Retorna métricas do modelo ativo e estatísticas
-        """
+        
         try:
             ml_service = MLService()
             resultado = ml_service.obter_metricas()

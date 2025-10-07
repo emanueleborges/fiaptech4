@@ -1,7 +1,4 @@
-"""
-Interface Gradio COMPLETA - Todas as funcionalidades
-IBOVESPA + Machine Learning (simulado)
-"""
+
 import gradio as gr
 import pandas as pd
 import plotly.express as px
@@ -10,12 +7,10 @@ import requests
 import json
 from datetime import datetime
 
-# URL da API Flask
 API_BASE = "http://127.0.0.1:5000"
 
 
 def carregar_dados_existentes():
-    """Carrega dados existentes do banco"""
     try:
         response = requests.get(f"{API_BASE}/ibov/ativos")
         if response.status_code == 200:
@@ -24,7 +19,6 @@ def carregar_dados_existentes():
             if not ativos:
                 return None, "📊 Nenhum ativo encontrado no banco. Execute o scraping primeiro.", None
             
-            # Converter para DataFrame
             df = pd.DataFrame([{
                 'Código': ativo['codigo'],
                 'Nome': ativo['nome'][:40],
@@ -33,7 +27,6 @@ def carregar_dados_existentes():
                 'Data': ativo['data']
             } for ativo in ativos])
             
-            # Criar gráfico de participação
             fig = px.bar(
                 df.head(15), 
                 x='Código', 
@@ -57,12 +50,10 @@ def carregar_dados_existentes():
 
 
 def fazer_scraping():
-    """Chama a API Flask para fazer scraping"""
     try:
         response = requests.post(f"{API_BASE}/ibov/scrap")
         
         if response.status_code in [200, 201]:
-            # Após scraping, carregar dados atualizados
             return carregar_dados_existentes()
         else:
             return None, f"❌ Erro no scraping: {response.text}", None
@@ -74,14 +65,12 @@ def fazer_scraping():
 
 
 def fazer_scraping_historico():
-    """Chama a API Flask para fazer scraping de 6 meses"""
     try:
         response = requests.post(f"{API_BASE}/ibov/scrap-historico", json={}, headers={'Content-Type': 'application/json'})
         
         if response.status_code in [200, 201]:
             data = response.json()
             mensagem = f"✅ {data.get('mensagem')}\n📅 Dias: {data.get('dias_coletados')}\n📊 Registros: {data.get('total_registros')}\n📈 Média/dia: {data.get('media_por_dia')}\n❌ Erros: {data.get('erros')}"
-            # Carregar dados atualizados
             df, _, fig = carregar_dados_existentes()
             return df, mensagem, fig
         else:
@@ -94,7 +83,6 @@ def fazer_scraping_historico():
 
 
 def refinar_dados():
-    """Chama a API para refinar dados para ML"""
     try:
         response = requests.post(f"{API_BASE}/ml/refinar", json={}, headers={'Content-Type': 'application/json'})
         if response.status_code in [200, 201]:
@@ -108,13 +96,11 @@ def refinar_dados():
 
 
 def listar_dados_refinados():
-    """Lista dados refinados salvos"""
     try:
         response = requests.get(f"{API_BASE}/ml/dados-refinados")
         if response.status_code == 200:
             data = response.json()
             
-            # Converter para DataFrame
             df = pd.DataFrame(data['dados_refinados'])
             
             mensagem = f"📊 **{data['total']} registros** refinados encontrados"
@@ -126,15 +112,12 @@ def listar_dados_refinados():
 
 
 def treinar_modelo():
-    """Chama a API para treinar modelo ML"""
     try:
         response = requests.post(f"{API_BASE}/ml/treinar", json={}, headers={'Content-Type': 'application/json'})
         if response.status_code in [200, 201]:
             data = response.json()
-            # Tenta pegar métricas da nova estrutura primeiro
             metricas = data.get('metricas_gerais', data.get('metricas', {}))
             
-            # Extrai métricas com fallback para estrutura antiga
             acuracia = float(metricas.get('acuracia', data.get('acuracia', 0)))
             precision = float(metricas.get('precision', data.get('precision', 0)))
             recall = float(metricas.get('recall', data.get('recall', 0)))
@@ -142,7 +125,6 @@ def treinar_modelo():
             
             mensagem = f"✅ {data.get('mensagem', 'Modelo treinado!')}\n📊 Acurácia: {acuracia*100:.1f}%\n🎯 Precision: {precision*100:.1f}%\n🔍 Recall: {recall*100:.1f}%\n⚖️ F1-Score: {f1_score*100:.1f}%"
             
-            # Adicionar informações extras se disponíveis
             if 'metricas_por_classe' in data:
                 mensagem += f"\n\n📈 Detalhes por classe:"
                 metricas_classe = data['metricas_por_classe']
@@ -161,16 +143,13 @@ def treinar_modelo():
 
 
 def fazer_predicoes():
-    """Chama a API para fazer predições"""
     try:
         print("DEBUG - Iniciando predições...")
         
-        # TESTE 1: Verificar se há modelo treinado
         response_metricas = requests.get(f"{API_BASE}/ml/metricas")
         if response_metricas.status_code != 200:
             return None, "❌ Erro: Nenhum modelo treinado. Treine um modelo primeiro!", None
         
-        # TESTE 2: Buscar TODOS os códigos para predição
         response_ativos = requests.get(f"{API_BASE}/ibov/ativos")
         if response_ativos.status_code != 200:
             return None, "❌ Erro ao buscar ativos para predição", None
@@ -183,7 +162,6 @@ def fazer_predicoes():
         print(f"DEBUG - Total de códigos selecionados: {len(codigos)}")
         print(f"DEBUG - Primeiros 10 códigos: {codigos[:10]}")
         
-        # TESTE 3: Fazer predição para TODOS os códigos
         payload = {"codigos": codigos}
         print(f"DEBUG - Testando {len(codigos)} códigos")
         
@@ -196,7 +174,6 @@ def fazer_predicoes():
         if response.status_code != 200:
             return None, f"❌ Erro em predições: {response.text}", None
         
-        # TESTE 5: Processar dados de forma super simples
         data = response.json()
         print(f"DEBUG - Tipo de data: {type(data)}")
         print(f"DEBUG - Keys em data: {list(data.keys()) if isinstance(data, dict) else 'Não é dict'}")
@@ -217,13 +194,11 @@ def fazer_predicoes():
         
         print(f"DEBUG - Primeira predição: {predicoes[0] if predicoes else 'Lista vazia'}")
         
-        # TESTE 6: Criar DataFrame super simples - compatível com Gradio
         dados_simples = []
         for i, pred in enumerate(predicoes):
             print(f"DEBUG - Processando predição {i}: {pred}")
             print(f"DEBUG - Chaves disponíveis: {list(pred.keys()) if isinstance(pred, dict) else 'Não é dict'}")
             
-            # Garantir que todos os valores são strings simples para o Gradio
             codigo = str(pred.get('codigo', 'ERRO'))
             predicao = str(pred.get('predicao', pred.get('recomendacao', 'ERRO')))
             confianca = str(pred.get('confianca', 0))
@@ -236,32 +211,25 @@ def fazer_predicoes():
         
         print(f"DEBUG - Dados simples: {dados_simples}")
         
-        # TESTE 6: Retornar dados com GRÁFICO
         if dados_simples:
             try:
-                # Criar DataFrame
                 df_simples = pd.DataFrame(dados_simples)
                 print(f"DEBUG - DataFrame criado com sucesso: {df_simples.head()}")
                 
-                # Garantir que todas as colunas são string
                 for col in df_simples.columns:
                     df_simples[col] = df_simples[col].astype(str)
                 
-                # CRIAR GRÁFICO de distribuição das recomendações (3 classes)
                 recomendacoes = [item['Recomendacao'] for item in dados_simples]
                 
-                # Contar recomendações (3 classes)
                 total_comprar = sum(1 for r in recomendacoes if r == 'COMPRAR')
                 total_manter = sum(1 for r in recomendacoes if r == 'MANTER')
                 total_vender = sum(1 for r in recomendacoes if r == 'VENDER')
                 
                 print(f"DEBUG - COMPRAR: {total_comprar}, MANTER: {total_manter}, VENDER: {total_vender}")
                 
-                # Criar gráfico usando plotly (3 classes)
                 try:
                     import plotly.graph_objects as go
                     
-                    # Preparar dados para o gráfico
                     labels = []
                     values = []
                     colors = []
@@ -307,7 +275,6 @@ def fazer_predicoes():
             except Exception as df_error:
                 print(f"DEBUG - Erro ao criar DataFrame/Gráfico: {df_error}")
                 
-                # Se DataFrame falhou, retornar como texto simples
                 texto_resultado = f"Predições realizadas ({len(dados_simples)} ativos):\n\n"
                 comprar_count = 0
                 manter_count = 0
@@ -339,7 +306,6 @@ def fazer_predicoes():
         return None, error_msg, None
 
 
-# Interface Gradio COMPLETA
 with gr.Blocks(title="IBOVESPA + ML - Sistema Completo", theme=gr.themes.Soft()) as demo:
     gr.Markdown("# 📊 Sistema IBOVESPA + Machine Learning")
     gr.Markdown("### Sistema de ML - FIAP DESAFIO 3")
@@ -371,7 +337,6 @@ with gr.Blocks(title="IBOVESPA + ML - Sistema Completo", theme=gr.themes.Soft())
             outputs=[tabela_scrap, status_scrap, grafico_scrap]
         )
     
-    # Auto-carregar dados ao iniciar a interface
     demo.load(
         fn=carregar_dados_existentes,
         outputs=[tabela_scrap, status_scrap, grafico_scrap]

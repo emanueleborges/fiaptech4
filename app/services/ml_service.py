@@ -1,7 +1,4 @@
-"""
-Serviço de Machine Learning
-Responsável por refinar dados, treinar modelos e fazer predições
-"""
+
 import os
 import json
 import joblib
@@ -25,87 +22,66 @@ logger = logging.getLogger(__name__)
 
 
 class MLService:
-    """Serviço de Machine Learning para predição de ações"""
     
     def __init__(self):
         self.modelos_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'modelos')
         os.makedirs(self.modelos_dir, exist_ok=True)
     
     def refinar_dados(self) -> dict:
-        """
-        ENDPOINT 1: Refinar dados brutos para ML
-        
-        Pega dados da tabela ibov_ativos e cria features para ML
-        Salva na tabela dados_refinados
-        """
+       
         try:
             # LIMPAR DADOS ANTIGOS PRIMEIRO!
             DadosRefinados.query.delete()
             db.session.commit()
             
-            # Busca todos os ativos
             ativos = IbovAtivo.query.all()
             
             if not ativos:
                 return {'erro': 'Nenhum dado encontrado na tabela ibov_ativos'}
             
-            # CRIAR TABELA SE NÃO EXISTIR
             db.create_all()
             
             refinados_salvos = 0
             
             for ativo in ativos:
-                # Converte participacao para float
                 try:
                     participacao = float(ativo.participacao.replace(',', '.')) if ativo.participacao else 0.0
                 except:
                     participacao = 0.0
                 
-                # Converte quantidade teórica
                 try:
                     qtde_str = ativo.theoricalQty.replace('.', '').replace(',', '.')
                     qtde_teorica = float(qtde_str) / 1_000_000  # Normaliza para milhões
                 except:
                     qtde_teorica = 0.0
                 
-                # Classifica tipo
                 tipo_on = 1 if 'ON' in ativo.tipo.upper() else 0
                 tipo_pn = 1 if 'PN' in ativo.tipo.upper() else 0
                 
-                # Calcula features principais (existentes na tabela)
                 variacao = self._calcular_variacao(ativo.codigo, ativo.data)
                 media_movel_7d = self._calcular_media_movel(ativo.codigo, ativo.data, dias=7)
                 volatilidade = self._calcular_volatilidade(ativo.codigo, ativo.data, dias=7)
                 
-                # Features AVANÇADAS técnicas
-                # 1. Score de liquidez (baseado em participação + volume)
                 score_liquidez = (participacao * 100) + (min(qtde_teorica, 5.0) * 0.1)
                 
-                # 2. Score de momentum (variação recente)
                 score_momentum = (variacao or 0) * 10 if variacao else 0
                 
-                # 3. Score de estabilidade (inverso da volatilidade)
                 score_estabilidade = 1.0 / (1.0 + (volatilidade or 0.1))
                 
-                # 4. Score de tendência (média móvel vs participação atual)
                 if media_movel_7d and participacao > 0:
                     score_tendencia = (participacao - media_movel_7d) / participacao * 100
                 else:
                     score_tendencia = 0
                 
-                # 5. Score de tipo com peso maior para ON
                 score_tipo = 1.5 if tipo_on else 0.7
                 
-                # 6. Score composto de qualidade
                 score_qualidade = (score_liquidez * 0.3 + 
                                  score_estabilidade * 0.2 + 
                                  abs(score_tendencia) * 0.1 + 
                                  score_tipo * 0.1)
                 
-                # Target SOFISTICADO multi-período
-                # Analisa performance em múltiplos horizontes
+
                 
-                # Performance D+1 (peso 40%)
                 data_amanha = ativo.data + timedelta(days=1)
                 ativo_amanha = IbovAtivo.query.filter_by(
                     codigo=ativo.codigo, data=data_amanha
@@ -119,7 +95,6 @@ class MLService:
                     except:
                         score_d1 = 0.0
                 
-                # Performance D+3 (peso 30%)
                 data_3dias = ativo.data + timedelta(days=3)
                 ativo_3dias = IbovAtivo.query.filter_by(
                     codigo=ativo.codigo, data=data_3dias
@@ -133,7 +108,6 @@ class MLService:
                     except:
                         score_d3 = 0.0
                 
-                # Score técnico (peso 30%)
                 score_tecnico = (
                     score_momentum * 0.4 +
                     score_tendencia * 0.3 +
@@ -141,14 +115,12 @@ class MLService:
                     score_estabilidade * 0.1
                 ) * 0.01  # Normaliza
                 
-                # Score final composto
                 performance_score = (
                     score_d1 * 0.4 +
                     score_d3 * 0.3 +
                     score_tecnico * 0.3
                 )
                 
-                # Ruído mínimo para evitar overfitting
                 import random
                 import time
                 seed_unico = int(time.time() * 1000) + hash(ativo.codigo) % 1000
@@ -156,10 +128,8 @@ class MLService:
                 ruido = random.uniform(-0.02, 0.02)  # ±2% de ruído
                 performance_score += ruido
                 
-                # Adiciona o score temporário (será convertido depois)
                 recomendacao = performance_score
                 
-                # Verifica se já existe
                 existe = DadosRefinados.query.filter_by(
                     codigo=ativo.codigo,
                     data_referencia=ativo.data
@@ -184,17 +154,13 @@ class MLService:
             
             db.session.commit()
             
-            # PASSO 2: Converter scores em classificação com 3 CLASSES
-            # COMPRAR (2), MANTER (1), VENDER (0)
             todos_registros = DadosRefinados.query.all()
             scores = [r.recomendacao for r in todos_registros]
             
-            # Calcula thresholds para 3 classes (tercios)
             import statistics
             import numpy as np
             scores_sorted = sorted(scores)
             
-            # Divide em terços (33% cada classe)
             tamanho = len(scores_sorted)
             threshold_baixo = scores_sorted[tamanho // 3] if tamanho > 3 else min(scores)
             threshold_alto = scores_sorted[2 * tamanho // 3] if tamanho > 3 else max(scores)
@@ -233,44 +199,31 @@ class MLService:
             return {'erro': str(e)}
     
     def treinar_modelo(self, algoritmo='RandomForest') -> dict:
-        """
-        ENDPOINT 2: Treinar modelo de ML
-        
-        Treina modelo Random Forest com dados refinados
-        Salva o modelo e registra métricas
-        """
+       
         try:
             import time  # Para aleatoriedade real
-            # CRIAR TABELA SE NÃO EXISTIR
             db.create_all()
             
-            # Busca dados refinados
             dados = DadosRefinados.query.all()
             
             if len(dados) < 10:
                 return {'erro': 'Poucos dados para treinar. Mínimo 10 amostras.'}
             
-            # Prepara DataFrame
             df = pd.DataFrame([d.to_dict() for d in dados])
             
-            # Ordena por data para separação temporal
             df = df.sort_values('data_referencia')
             
-            # Features (X) e Target (y)
             features = ['participacao_pct', 'qtde_teorica', 'tipo_on', 'tipo_pn', 
                        'variacao_percentual', 'media_movel_7d', 'volatilidade']
             X = df[features].fillna(0)
             y = df['recomendacao'].fillna(0)
             
-            # SEPARAÇÃO TEMPORAL (não aleatória!)
-            # 80% primeiros dados = treino, 20% últimos = teste
             split_index = int(len(X) * 0.8)
             X_train = X.iloc[:split_index]
             X_test = X.iloc[split_index:]
             y_train = y.iloc[:split_index]
             y_test = y.iloc[split_index:]
             
-            # Verifica se tem dados suficientes de cada classe NO TREINO (3 classes)
             from collections import Counter
             distribuicao_treino = Counter(y_train)
             
@@ -280,7 +233,6 @@ class MLService:
             
             print(f"DEBUG - Distribuição treino: VENDER={vender_treino}, MANTER={manter_treino}, COMPRAR={comprar_treino}")
             
-            # Precisa ter pelo menos 5% de cada classe (mais flexível para 3 classes)
             percentual_minimo = 0.05
             total_treino = len(y_train)
             
@@ -291,18 +243,15 @@ class MLService:
                     'erro': f'Dados desbalanceados. VENDER: {vender_treino}, MANTER: {manter_treino}, COMPRAR: {comprar_treino}. Refine os dados novamente.'
                 }
             
-            # Normalização AVANÇADA com RobustScaler (mais resistente a outliers)
             scaler = RobustScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)
             
-            # ENSEMBLE AVANÇADO com múltiplos algoritmos otimizados
             random_state_dinamico = int(time.time()) % 10000
             
-            # 1. RandomForest otimizado
             rf = RandomForestClassifier(
-                n_estimators=200,  # Mais árvores
-                max_depth=12,      # Mais profundidade
+                n_estimators=200,  
+                max_depth=12,      
                 min_samples_split=8,
                 min_samples_leaf=3,
                 max_features='sqrt',
@@ -312,7 +261,6 @@ class MLService:
                 n_jobs=-1
             )
             
-            # 2. Extra Trees (mais diversidade)
             from sklearn.ensemble import ExtraTreesClassifier
             et = ExtraTreesClassifier(
                 n_estimators=150,
@@ -326,43 +274,37 @@ class MLService:
                 n_jobs=-1
             )
             
-            # 3. Gradient Boosting otimizado
             gb = GradientBoostingClassifier(
                 n_estimators=100,
-                learning_rate=0.05,  # Menor para melhor convergência
+                learning_rate=0.05,  
                 max_depth=8,
                 min_samples_split=15,
                 min_samples_leaf=6,
-                subsample=0.8,  # Adiciona aleatoriedade
+                subsample=0.8,  
                 random_state=random_state_dinamico
             )
             
-            # Ensemble com pesos otimizados
             modelo = VotingClassifier(
                 estimators=[
-                    ('rf', rf),      # Peso implícito = 1
-                    ('et', et),      # Peso implícito = 1  
-                    ('gb', gb)       # Peso implícito = 1
+                    ('rf', rf),      
+                    ('et', et),        
+                    ('gb', gb)       
                 ],
-                voting='soft',       # Usa probabilidades
+                voting='soft',       
                 n_jobs=-1
             )
             
-            # DEBUG: Verificar dados antes do treinamento
             print(f"🔍 DEBUG - Formato X_train: {X_train_scaled.shape}")
             print(f"🔍 DEBUG - Formato y_train: {y_train.shape}")
             print(f"🔍 DEBUG - Primeiros 5 valores de y_train: {y_train.iloc[:5].tolist()}")
             print(f"🔍 DEBUG - Valores únicos em y_train: {sorted(y_train.unique())}")
             
-            # Treina o modelo
             print("🤖 Treinando modelo RandomForest otimizado...")
             modelo.fit(X_train_scaled, y_train)
             
-            # Predições
             print("🔮 Fazendo predições no conjunto de teste...")
             y_pred = modelo.predict(X_test_scaled)
             
-            # DEBUG: Verificar distribuição das predições
             from collections import Counter
             distribuicao_real = Counter(y_test)
             distribuicao_pred = Counter(y_pred)
@@ -372,27 +314,22 @@ class MLService:
             print(f"🔍 DEBUG - Primeiros 10 valores reais: {y_test.iloc[:10].tolist()}")
             print(f"🔍 DEBUG - Primeiros 10 valores preditos: {y_pred[:10].tolist()}")
             
-            # Converte para tipos Python nativos (evita erro de serialização JSON)
             distribuicao_real_dict = {int(k): int(v) for k, v in distribuicao_real.items()}
             distribuicao_pred_dict = {int(k): int(v) for k, v in distribuicao_pred.items()}
             
-            # Métricas AVANÇADAS
             acuracia = accuracy_score(y_test, y_pred)
             precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
             recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
             f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
             
-            # Relatório detalhado por classe
             relatorio = classification_report(y_test, y_pred, output_dict=True, zero_division=0,
                                             target_names=['VENDER', 'MANTER', 'COMPRAR'])
             
-            # Feature Importance (se disponível)
             feature_importance = {}
             try:
                 if hasattr(modelo, 'feature_importances_'):
                     importances = modelo.feature_importances_
                 elif hasattr(modelo, 'estimators_') and hasattr(modelo.estimators_[0], 'feature_importances_'):
-                    # Para VotingClassifier, pega do RandomForest
                     importances = modelo.estimators_[0].feature_importances_
                 else:
                     importances = [1/len(features)] * len(features)  # Uniform se não disponível
@@ -401,7 +338,6 @@ class MLService:
             except:
                 feature_importance = dict(zip(features, [1/len(features)] * len(features)))
             
-            # Análise de confiança das predições
             try:
                 y_proba = modelo.predict_proba(X_test_scaled)
                 confianca_media = float(np.mean(np.max(y_proba, axis=1)))
@@ -410,7 +346,6 @@ class MLService:
                 confianca_media = 0.5
                 confianca_std = 0.0
             
-            # Salva modelo
             versao = datetime.now().strftime('%Y%m%d_%H%M%S')
             nome_arquivo = f'modelo_ibov_{versao}.pkl'
             caminho_modelo = os.path.join(self.modelos_dir, nome_arquivo)
@@ -421,7 +356,6 @@ class MLService:
                 'features': features
             }, caminho_modelo)
             
-            # Registra no banco
             modelo_db = ModeloTreinado(
                 nome='Modelo IBOV',
                 versao=versao,
@@ -437,7 +371,6 @@ class MLService:
                 ativo=True
             )
             
-            # Desativa modelos antigos
             ModeloTreinado.query.update({ModeloTreinado.ativo: False})
             
             db.session.add(modelo_db)
@@ -511,11 +444,7 @@ class MLService:
             return {'erro': str(e)}
     
     def prever(self, codigo: str) -> dict:
-        """
-        ENDPOINT 3: Fazer predição
-        
-        Usa modelo treinado para prever se deve COMPRAR ou VENDER
-        """
+       
         try:
             # Busca modelo ativo
             modelo_db = ModeloTreinado.query.filter_by(ativo=True).first()
@@ -523,7 +452,6 @@ class MLService:
             if not modelo_db:
                 return {'erro': 'Nenhum modelo treinado disponível'}
             
-            # Carrega modelo - com tratamento para incompatibilidade do numpy
             try:
                 modelo_data = joblib.load(modelo_db.caminho_modelo)
                 modelo = modelo_data['modelo']
@@ -535,7 +463,6 @@ class MLService:
                 else:
                     return {'erro': f'Erro ao carregar modelo: {str(load_error)}'}
             
-            # Busca dados refinados mais recentes da ação
             dado = DadosRefinados.query.filter_by(codigo=codigo).order_by(
                 DadosRefinados.data_referencia.desc()
             ).first()
@@ -543,7 +470,6 @@ class MLService:
             if not dado:
                 return {'erro': f'Dados não encontrados para {codigo}'}
             
-            # Prepara features - TODAS as 7 features como no treinamento
             X = np.array([[
                 dado.participacao_pct or 0,
                 dado.qtde_teorica or 0,
@@ -556,11 +482,9 @@ class MLService:
             
             X_scaled = scaler.transform(X)
             
-            # Predição
             predicao = modelo.predict(X_scaled)[0]
             probabilidades = modelo.predict_proba(X_scaled)[0]
             
-            # Mapear predição para 3 classes
             if predicao == 2:
                 recomendacao = 'COMPRAR'
             elif predicao == 1:
@@ -595,24 +519,17 @@ class MLService:
             return {'erro': str(e)}
     
     def obter_metricas(self) -> dict:
-        """
-        ENDPOINT 4: Obter métricas do modelo
-        
-        Retorna informações sobre o modelo ativo e histórico
-        """
+       
         try:
-            # Modelo ativo
             modelo_ativo = ModeloTreinado.query.filter_by(ativo=True).first()
             
             if not modelo_ativo:
                 return {'erro': 'Nenhum modelo treinado disponível'}
             
-            # Histórico de modelos
             historico = ModeloTreinado.query.order_by(
                 ModeloTreinado.data_treinamento.desc()
             ).limit(10).all()
             
-            # Estatísticas dos dados
             total_dados = DadosRefinados.query.count()
             total_comprar = DadosRefinados.query.filter_by(recomendacao=1).count()
             total_vender = DadosRefinados.query.filter_by(recomendacao=0).count()
@@ -632,10 +549,8 @@ class MLService:
             logger.error(f"Erro ao obter métricas: {e}")
             return {'erro': str(e)}
     
-    # ====== Métodos auxiliares ======
     
     def _calcular_variacao(self, codigo: str, data_atual) -> float:
-        """Calcula variação percentual em relação ao dia anterior"""
         try:
             dia_anterior = data_atual - timedelta(days=1)
             ativo_anterior = IbovAtivo.query.filter_by(
@@ -655,7 +570,6 @@ class MLService:
         return None
     
     def _calcular_media_movel(self, codigo: str, data_atual, dias=7) -> float:
-        """Calcula média móvel de X dias"""
         try:
             data_inicio = data_atual - timedelta(days=dias)
             ativos = IbovAtivo.query.filter(
@@ -672,7 +586,6 @@ class MLService:
         return None
     
     def _calcular_volatilidade(self, codigo: str, data_atual, dias=7) -> float:
-        """Calcula volatilidade (desvio padrão)"""
         try:
             data_inicio = data_atual - timedelta(days=dias)
             ativos = IbovAtivo.query.filter(
@@ -689,7 +602,6 @@ class MLService:
         return None
 
     def _calcular_rsi(self, codigo: str, data_atual, periodo=14) -> float:
-        """Calcula Relative Strength Index (RSI)"""
         try:
             data_inicio = data_atual - timedelta(days=periodo + 5)
             ativos = IbovAtivo.query.filter(
@@ -701,14 +613,11 @@ class MLService:
             if len(ativos) >= periodo:
                 precos = [float(a.participacao.replace(',', '.')) for a in ativos]
                 
-                # Calcula variações diárias
                 deltas = [precos[i] - precos[i-1] for i in range(1, len(precos))]
                 
-                # Separa ganhos e perdas
                 ganhos = [d if d > 0 else 0 for d in deltas]
                 perdas = [-d if d < 0 else 0 for d in deltas]
                 
-                # Média dos últimos 'periodo' dias
                 if len(ganhos) >= periodo and len(perdas) >= periodo:
                     avg_ganho = sum(ganhos[-periodo:]) / periodo
                     avg_perda = sum(perdas[-periodo:]) / periodo
@@ -719,10 +628,9 @@ class MLService:
                         return rsi
         except:
             pass
-        return 50.0  # RSI neutro
+        return 50.0  
     
     def _calcular_momentum(self, codigo: str, data_atual, periodo=5) -> float:
-        """Calcula momentum (taxa de mudança)"""
         try:
             data_inicio = data_atual - timedelta(days=periodo + 2)
             ativos = IbovAtivo.query.filter(
@@ -743,7 +651,6 @@ class MLService:
         return 0.0
     
     def _calcular_ranking_participacao(self, ativo_atual, todos_ativos) -> int:
-        """Calcula posição no ranking de participação"""
         try:
             participacoes = []
             for ativo in todos_ativos:
@@ -754,20 +661,17 @@ class MLService:
                     except:
                         participacoes.append((ativo.codigo, 0.0))
             
-            # Ordena por participação (maior para menor)
             participacoes.sort(key=lambda x: x[1], reverse=True)
             
-            # Encontra posição do ativo atual
             for i, (codigo, _) in enumerate(participacoes):
                 if codigo == ativo_atual.codigo:
                     return i + 1  # Posição 1-based
                     
         except:
             pass
-        return 50  # Posição média
+        return 50  
     
     def _calcular_ranking_volume(self, ativo_atual, todos_ativos) -> int:
-        """Calcula posição no ranking de volume (quantidade teórica)"""
         try:
             volumes = []
             for ativo in todos_ativos:
@@ -779,14 +683,12 @@ class MLService:
                     except:
                         volumes.append((ativo.codigo, 0.0))
             
-            # Ordena por volume (maior para menor)
             volumes.sort(key=lambda x: x[1], reverse=True)
             
-            # Encontra posição do ativo atual
             for i, (codigo, _) in enumerate(volumes):
                 if codigo == ativo_atual.codigo:
                     return i + 1
                     
         except:
             pass
-        return 50  # Posição média
+        return 50  
