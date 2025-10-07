@@ -1,10 +1,11 @@
 # 🎯 FIAP Tech Challenge - Fase 3
+
 ## Sistema de Machine Learning para Análise IBOVESPA
 
 ### 📋 Descrição do Projeto
 
 Este projeto implementa um sistema completo de Machine Learning para análise e predição de ativos do IBOVESPA, desenvolvido como parte do **FIAP Tech Challenge - Fase 3**.
----
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ## 🚀 Como Instalar e Executar
 
@@ -24,18 +25,21 @@ cd desafio3-fiap
 ### 🔧 Passo 2: Criar e Ativar Ambiente Virtual
 
 **Windows PowerShell:**
+
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
 **Windows CMD:**
+
 ```cmd
 python -m venv venv
 .\venv\Scripts\activate.bat
 ```
 
 **Linux/Mac:**
+
 ```bash
 python -m venv venv
 source venv/bin/activate
@@ -48,6 +52,7 @@ pip install -r requirements.txt
 ```
 
 **Dependências principais:**
+
 - Flask 3.0+ (API backend)
 - Gradio 4.44+ (Interface do usuário)
 - Pandas (Manipulação de dados)
@@ -91,26 +96,31 @@ O dashboard estará disponível em: `http://localhost:7860`
 ## 🎮 Como Usar o Sistema
 
 ### 1️⃣ **Coleta de Dados**
+
 - Acesse a aba "📊 Coleta de Dados"
 - Clique em "🚀 Executar Scraping B3"
 - Aguarde a coleta dos dados do IBOVESPA
 
 ### 2️⃣ **Refinamento**
+
 - Vá para a aba "🔧 Refinamento"
 - Clique em "⚡ Refinar Dados"
 - Os dados serão processados para Machine Learning
 
 ### 3️⃣ **Treinamento**
+
 - Acesse "🤖 Treinamento"
 - Clique em "🧠 Treinar Modelo"
 - O modelo será treinado e salvo automaticamente
 
 ### 4️⃣ **Predições**
+
 - Na aba "🔮 Predições"
 - Clique em "🎯 Fazer Predições"
 - Visualize as recomendações geradas
 
 ### 5️⃣ **Análise**
+
 - Acesse "📈 Análise e Métricas"
 - Clique em "📊 Carregar Métricas"
 - Acompanhe a performance do modelo
@@ -170,10 +180,12 @@ desafio3-fiap/
 ## 🔌 API Endpoints
 
 ### 📊 IBOVESPA
+
 - `GET /ibov/ativos` - Lista todos os ativos
 - `POST /scraping/b3` - Executa scraping do B3
 
 ### 🤖 Machine Learning
+
 - `POST /ml/refinar-dados` - Refina dados para ML
 - `GET /ml/dados-refinados` - Lista dados refinados
 - `POST /ml/treinar` - Treina o modelo
@@ -181,7 +193,15 @@ desafio3-fiap/
 - `GET /ml/metricas` - Obtém métricas do modelo
 
 ### 📈 Monitoramento
+
 - `GET /health` - Status da aplicação
 - `GET /swagger` - Documentação da API
 
 ---
+
+ 🔌 **Links**
+
+* **Link Youtube:**
+  https://www.youtube.com/watch?v=CYEjMDKPmKs
+* **Linkk Github:**
+  https://github.com/emanueleborges/fiaptech3
