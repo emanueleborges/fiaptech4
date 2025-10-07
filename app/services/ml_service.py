@@ -135,41 +135,47 @@ class MLService:
             
             db.session.commit()
             
-            # PASSO 2: Converter scores em classificação REALÍSTICA
-            # Não força 50/50, mas usa threshold natural baseado na mediana
+            # PASSO 2: Converter scores em classificação com 3 CLASSES
+            # COMPRAR (2), MANTER (1), VENDER (0)
             todos_registros = DadosRefinados.query.all()
             scores = [r.recomendacao for r in todos_registros]
             
-            # Calcula threshold dinâmico (mediana + pequeno ajuste VARIÁVEL)
+            # Calcula thresholds para 3 classes (tercios)
             import statistics
-            import time
-            mediana = statistics.median(scores)
-            desvio = statistics.stdev(scores) if len(scores) > 1 else 0.1
+            import numpy as np
+            scores_sorted = sorted(scores)
             
-            # Threshold com aleatoriedade (varia entre execuções)
-            ajuste_aleatorio = (time.time() % 1) - 0.5  # Entre -0.5 e +0.5
-            threshold = mediana + (desvio * 0.2) + (ajuste_aleatorio * desvio * 0.1)
+            # Divide em terços (33% cada classe)
+            tamanho = len(scores_sorted)
+            threshold_baixo = scores_sorted[tamanho // 3] if tamanho > 3 else min(scores)
+            threshold_alto = scores_sorted[2 * tamanho // 3] if tamanho > 3 else max(scores)
+            
+            print(f"DEBUG - Thresholds: Baixo={threshold_baixo:.4f}, Alto={threshold_alto:.4f}")
             
             total_comprar = 0
+            total_manter = 0
             total_vender = 0
             
             for registro in todos_registros:
-                if registro.recomendacao > threshold:
-                    registro.recomendacao = 1  # COMPRAR
+                if registro.recomendacao >= threshold_alto:
+                    registro.recomendacao = 2  # COMPRAR (top 33%)
                     total_comprar += 1
+                elif registro.recomendacao >= threshold_baixo:
+                    registro.recomendacao = 1  # MANTER (middle 33%)
+                    total_manter += 1
                 else:
-                    registro.recomendacao = 0  # VENDER
+                    registro.recomendacao = 0  # VENDER (bottom 33%)
                     total_vender += 1
             
             db.session.commit()
             
             return {
-                'mensagem': 'Dados refinados com sucesso! (Performance futura + ruído)',
+                'mensagem': 'Dados refinados com sucesso! (3 classes: COMPRAR, MANTER, VENDER)',
                 'total_processado': len(ativos),
                 'total_salvos': refinados_salvos,
-                'distribuicao': f'COMPRAR: {total_comprar}, VENDER: {total_vender}',
-                'estrategia': 'Target baseado em performance FUTURA com ruído para evitar overfitting',
-                'threshold': f'Threshold dinâmico: {threshold:.4f}'
+                'distribuicao': f'COMPRAR: {total_comprar}, MANTER: {total_manter}, VENDER: {total_vender}',
+                'estrategia': 'Target baseado em performance FUTURA com 3 classes (terços)',
+                'thresholds': f'Baixo: {threshold_baixo:.4f}, Alto: {threshold_alto:.4f}'
             }
             
         except Exception as e:
@@ -215,15 +221,25 @@ class MLService:
             y_train = y.iloc[:split_index]
             y_test = y.iloc[split_index:]
             
-            # Verifica se tem dados suficientes de cada classe NO TREINO
-            comprar_treino = int(y_train.sum())
-            vender_treino = len(y_train) - comprar_treino
+            # Verifica se tem dados suficientes de cada classe NO TREINO (3 classes)
+            from collections import Counter
+            distribuicao_treino = Counter(y_train)
             
-            # Precisa ter pelo menos 10% de cada classe
-            percentual_minimo = 0.10
-            if comprar_treino < len(y_train) * percentual_minimo or vender_treino < len(y_train) * percentual_minimo:
+            vender_treino = distribuicao_treino.get(0, 0)      # Classe 0 = VENDER
+            manter_treino = distribuicao_treino.get(1, 0)      # Classe 1 = MANTER
+            comprar_treino = distribuicao_treino.get(2, 0)     # Classe 2 = COMPRAR
+            
+            print(f"DEBUG - Distribuição treino: VENDER={vender_treino}, MANTER={manter_treino}, COMPRAR={comprar_treino}")
+            
+            # Precisa ter pelo menos 5% de cada classe (mais flexível para 3 classes)
+            percentual_minimo = 0.05
+            total_treino = len(y_train)
+            
+            if (vender_treino < total_treino * percentual_minimo or 
+                manter_treino < total_treino * percentual_minimo or 
+                comprar_treino < total_treino * percentual_minimo):
                 return {
-                    'erro': f'Dados muito desbalanceados. COMPRAR: {comprar_treino}, VENDER: {vender_treino}. Refine os dados novamente.'
+                    'erro': f'Dados desbalanceados. VENDER: {vender_treino}, MANTER: {manter_treino}, COMPRAR: {comprar_treino}. Refine os dados novamente.'
                 }
             
             # Normalização
@@ -317,7 +333,7 @@ class MLService:
                     'teste': len(X_test)
                 },
                 'debug': {
-                    'distribuicao_treino': f'COMPRAR: {comprar_treino}, VENDER: {vender_treino}',
+                    'distribuicao_treino': f'VENDER: {vender_treino}, MANTER: {manter_treino}, COMPRAR: {comprar_treino}',
                     'distribuicao_teste_real': distribuicao_real_dict,
                     'distribuicao_teste_pred': distribuicao_pred_dict,
                     'metricas_por_classe': {
@@ -326,10 +342,15 @@ class MLService:
                             'recall': round(relatorio['0']['recall'], 4) if '0' in relatorio else 0,
                             'f1': round(relatorio['0']['f1-score'], 4) if '0' in relatorio else 0
                         },
-                        'classe_1_comprar': {
+                        'classe_1_manter': {
                             'precision': round(relatorio['1']['precision'], 4) if '1' in relatorio else 0,
                             'recall': round(relatorio['1']['recall'], 4) if '1' in relatorio else 0,
                             'f1': round(relatorio['1']['f1-score'], 4) if '1' in relatorio else 0
+                        },
+                        'classe_2_comprar': {
+                            'precision': round(relatorio['2']['precision'], 4) if '2' in relatorio else 0,
+                            'recall': round(relatorio['2']['recall'], 4) if '2' in relatorio else 0,
+                            'f1': round(relatorio['2']['f1-score'], 4) if '2' in relatorio else 0
                         }
                     }
                 }
@@ -390,7 +411,14 @@ class MLService:
             predicao = modelo.predict(X_scaled)[0]
             probabilidades = modelo.predict_proba(X_scaled)[0]
             
-            recomendacao = 'COMPRAR' if predicao == 1 else 'VENDER'
+            # Mapear predição para 3 classes
+            if predicao == 2:
+                recomendacao = 'COMPRAR'
+            elif predicao == 1:
+                recomendacao = 'MANTER'
+            else:
+                recomendacao = 'VENDER'
+                
             confianca = max(probabilidades) * 100
             
             return {
@@ -399,8 +427,9 @@ class MLService:
                 'recomendacao': recomendacao,
                 'confianca': round(confianca, 2),
                 'probabilidades': {
-                    'vender': round(probabilidades[0] * 100, 2),
-                    'comprar': round(probabilidades[1] * 100, 2)
+                    'vender': round(probabilidades[0] * 100, 2) if len(probabilidades) > 0 else 0,
+                    'manter': round(probabilidades[1] * 100, 2) if len(probabilidades) > 1 else 0,
+                    'comprar': round(probabilidades[2] * 100, 2) if len(probabilidades) > 2 else 0
                 },
                 'dados_utilizados': {
                     'participacao': dado.participacao_pct,

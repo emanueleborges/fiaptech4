@@ -104,20 +104,49 @@ def prever():
     if codigos:
         try:
             from app.services.ml_service import MLService
+            from app.models.dados_refinados_model import DadosRefinados
+            from app.models.ibov_model import IbovAtivo
+            
+            # DEBUG: Verificar totais no banco
+            total_ativos = IbovAtivo.query.with_entities(IbovAtivo.codigo).distinct().count()
+            total_refinados = DadosRefinados.query.with_entities(DadosRefinados.codigo).distinct().count()
+            
+            print(f"DEBUG - Total de ativos únicos no banco ibov_ativos: {total_ativos}")
+            print(f"DEBUG - Total de códigos únicos com dados refinados: {total_refinados}")
+            
+            # Buscar códigos únicos com dados refinados
+            codigos_com_dados = DadosRefinados.query.with_entities(DadosRefinados.codigo).distinct().all()
+            codigos_unicos = [c[0] for c in codigos_com_dados]
+            
+            print(f"DEBUG - Códigos únicos com dados refinados: {len(codigos_unicos)}")
+            
             ml_service = MLService()
             predicoes = []
+            codigos_com_erro = []
             
-            for cod in codigos:
-                resultado = ml_service.prever(cod.upper())
-                
-                # Se não tem erro, adiciona à lista
-                if 'erro' not in resultado:
-                    predicoes.append({
-                        'codigo': resultado['codigo'],
-                        'predicao': resultado['recomendacao'],
-                        'confianca': resultado['confianca'],
-                        'probabilidade': resultado['probabilidades']['comprar'] / 100
-                    })
+            # Tentar predição para todos os códigos únicos que têm dados
+            for cod in codigos_unicos:
+                try:
+                    resultado = ml_service.prever(cod.upper())
+                    
+                    # Se não tem erro, adiciona à lista
+                    if 'erro' not in resultado:
+                        predicoes.append({
+                            'codigo': resultado['codigo'],
+                            'predicao': resultado['recomendacao'],
+                            'confianca': resultado['confianca'],
+                            'probabilidade': resultado['probabilidades']['comprar'] / 100
+                        })
+                    else:
+                        codigos_com_erro.append(f"{cod}: {resultado['erro']}")
+                except Exception as e:
+                    codigos_com_erro.append(f"{cod}: {str(e)}")
+                    continue
+            
+            print(f"DEBUG - Total de predições realizadas: {len(predicoes)}")
+            print(f"DEBUG - Total de códigos com erro: {len(codigos_com_erro)}")
+            if codigos_com_erro:
+                print(f"DEBUG - Primeiros 5 erros: {codigos_com_erro[:5]}")
             
             return jsonify({"predicoes": predicoes}), 200
             

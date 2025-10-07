@@ -150,45 +150,31 @@ def fazer_predicoes():
         if response_metricas.status_code != 200:
             return None, "❌ Erro: Nenhum modelo treinado. Treine um modelo primeiro!", None
         
-        # TESTE 2: Buscar alguns códigos para testar
+        # TESTE 2: Buscar TODOS os códigos para predição
         response_ativos = requests.get(f"{API_BASE}/ibov/ativos")
         if response_ativos.status_code != 200:
             return None, "❌ Erro ao buscar ativos para predição", None
         
-        ativos = response_ativos.json()[:5]  # Apenas 5 para teste
+        ativos = response_ativos.json()  # TODOS os ativos, não apenas 5
         if not ativos:
             return None, "❌ Nenhum ativo encontrado no banco", None
             
         codigos = [ativo['codigo'] for ativo in ativos]
-        print(f"DEBUG - Códigos selecionados: {codigos}")
+        print(f"DEBUG - Total de códigos selecionados: {len(codigos)}")
+        print(f"DEBUG - Primeiros 10 códigos: {codigos[:10]}")
         
-        # TESTE 3: Testar primeiro com um código único
-        codigo_teste = codigos[0]
-        print(f"DEBUG - Testando código único: {codigo_teste}")
-        
-        response_unico = requests.post(f"{API_BASE}/ml/prever", 
-                                     json={"codigo": codigo_teste},
-                                     headers={'Content-Type': 'application/json'})
-        
-        print(f"DEBUG - Resposta código único: Status {response_unico.status_code}")
-        print(f"DEBUG - Conteúdo: {response_unico.text}")
-        
-        if response_unico.status_code != 200:
-            return None, f"❌ Erro na predição única: {response_unico.text}", None
-        
-        # TESTE 4: Se código único funciona, testar múltiplos
+        # TESTE 3: Fazer predição para TODOS os códigos
         payload = {"codigos": codigos}
-        print(f"DEBUG - Testando múltiplos códigos: {payload}")
+        print(f"DEBUG - Testando {len(codigos)} códigos")
         
         response = requests.post(f"{API_BASE}/ml/prever", 
                                json=payload,
                                headers={'Content-Type': 'application/json'})
         
-        print(f"DEBUG - Status múltiplos: {response.status_code}")
-        print(f"DEBUG - Resposta múltiplos: {response.text}")
+        print(f"DEBUG - Status: {response.status_code}")
         
         if response.status_code != 200:
-            return None, f"❌ Erro em múltiplos códigos: {response.text}", None
+            return None, f"❌ Erro em predições: {response.text}", None
         
         # TESTE 5: Processar dados de forma super simples
         data = response.json()
@@ -199,7 +185,16 @@ def fazer_predicoes():
             return None, f"❌ Chave 'predicoes' não encontrada. Keys disponíveis: {list(data.keys())}", None
         
         predicoes = data['predicoes']
-        print(f"DEBUG - Número de predições: {len(predicoes)}")
+        print(f"DEBUG - COMPARAÇÃO IMPORTANTE:")
+        print(f"DEBUG - Códigos enviados: {len(codigos)}")
+        print(f"DEBUG - Predições recebidas: {len(predicoes)}")
+        print(f"DEBUG - Códigos enviados: {codigos}")
+        print(f"DEBUG - Códigos que retornaram: {[p.get('codigo', 'N/A') for p in predicoes]}")
+        
+        if len(predicoes) < len(codigos):
+            codigos_faltando = [c for c in codigos if c not in [p.get('codigo', '') for p in predicoes]]
+            print(f"DEBUG - CÓDIGOS QUE FALTARAM: {codigos_faltando}")
+        
         print(f"DEBUG - Primeira predição: {predicoes[0] if predicoes else 'Lista vazia'}")
         
         # TESTE 6: Criar DataFrame super simples - compatível com Gradio
@@ -221,10 +216,10 @@ def fazer_predicoes():
         
         print(f"DEBUG - Dados simples: {dados_simples}")
         
-        # TESTE 6: Retornar dados como string simples para debug
+        # TESTE 6: Retornar dados com GRÁFICO
         if dados_simples:
             try:
-                # Primeiro tentar DataFrame normal
+                # Criar DataFrame
                 df_simples = pd.DataFrame(dados_simples)
                 print(f"DEBUG - DataFrame criado com sucesso: {df_simples.head()}")
                 
@@ -232,16 +227,86 @@ def fazer_predicoes():
                 for col in df_simples.columns:
                     df_simples[col] = df_simples[col].astype(str)
                 
-                # Se chegou até aqui, DataFrame está OK
-                return df_simples, f"✅ {len(predicoes)} predições realizadas", None
+                # CRIAR GRÁFICO de distribuição das recomendações (3 classes)
+                recomendacoes = [item['Recomendacao'] for item in dados_simples]
+                
+                # Contar recomendações (3 classes)
+                total_comprar = sum(1 for r in recomendacoes if r == 'COMPRAR')
+                total_manter = sum(1 for r in recomendacoes if r == 'MANTER')
+                total_vender = sum(1 for r in recomendacoes if r == 'VENDER')
+                
+                print(f"DEBUG - COMPRAR: {total_comprar}, MANTER: {total_manter}, VENDER: {total_vender}")
+                
+                # Criar gráfico usando plotly (3 classes)
+                try:
+                    import plotly.graph_objects as go
+                    
+                    # Preparar dados para o gráfico
+                    labels = []
+                    values = []
+                    colors = []
+                    
+                    if total_comprar > 0:
+                        labels.append('COMPRAR')
+                        values.append(total_comprar)
+                        colors.append('#00AA00')  # Verde
+                    
+                    if total_manter > 0:
+                        labels.append('MANTER')
+                        values.append(total_manter)
+                        colors.append('#FFA500')  # Laranja
+                    
+                    if total_vender > 0:
+                        labels.append('VENDER')
+                        values.append(total_vender)
+                        colors.append('#AA0000')  # Vermelho
+                    
+                    fig = go.Figure(data=[go.Pie(
+                        labels=labels,
+                        values=values,
+                        marker=dict(colors=colors),
+                        textinfo='label+percent+value',
+                        title=f'Distribuição das {len(dados_simples)} Predições'
+                    )])
+                    
+                    fig.update_layout(
+                        title=f'📊 Predições IBOVESPA ({len(dados_simples)} ativos)',
+                        font=dict(size=14)
+                    )
+                    
+                    print(f"DEBUG - Gráfico criado com sucesso!")
+                    
+                except Exception as plot_error:
+                    print(f"DEBUG - Erro ao criar gráfico: {plot_error}")
+                    fig = None
+                
+                mensagem = f"✅ {len(predicoes)} predições realizadas:\n🟢 COMPRAR: {total_comprar}\n🟡 MANTER: {total_manter}\n🔴 VENDER: {total_vender}"
+                
+                return df_simples, mensagem, fig
                 
             except Exception as df_error:
-                print(f"DEBUG - Erro ao criar DataFrame: {df_error}")
+                print(f"DEBUG - Erro ao criar DataFrame/Gráfico: {df_error}")
                 
                 # Se DataFrame falhou, retornar como texto simples
-                texto_resultado = "Predições realizadas:\n\n"
+                texto_resultado = f"Predições realizadas ({len(dados_simples)} ativos):\n\n"
+                comprar_count = 0
+                manter_count = 0
+                vender_count = 0
+                
                 for i, item in enumerate(dados_simples):
-                    texto_resultado += f"{i+1}. {item['Codigo']}: {item['Recomendacao']} (Confiança: {item['Confianca']}%)\n"
+                    if item['Recomendacao'] == 'COMPRAR':
+                        emoji = "🟢"
+                        comprar_count += 1
+                    elif item['Recomendacao'] == 'MANTER':
+                        emoji = "🟡"
+                        manter_count += 1
+                    else:
+                        emoji = "🔴"
+                        vender_count += 1
+                        
+                    texto_resultado += f"{emoji} {item['Codigo']}: {item['Recomendacao']} ({item['Confianca']}%)\n"
+                
+                texto_resultado += f"\n📊 Resumo: {comprar_count} COMPRAR, {manter_count} MANTER, {vender_count} VENDER"
                 
                 return None, texto_resultado, None
         else:
