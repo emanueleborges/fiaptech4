@@ -10,16 +10,15 @@ from app.models.dados_refinados_model import DadosRefinados
 class MLController:
     """Controller para operações de Machine Learning"""
     
-    def __init__(self):
-        self.ml_service = MLService()
-    
-    def refinar_dados(self):
+    @staticmethod
+    def refinar_dados():
         """
         POST /ml/refinar
         Refina dados brutos e prepara features para ML
         """
         try:
-            resultado = self.ml_service.refinar_dados()
+            ml_service = MLService()
+            resultado = ml_service.refinar_dados()
             
             if 'erro' in resultado:
                 return jsonify(resultado), 400
@@ -57,7 +56,8 @@ class MLController:
         except Exception as e:
             return jsonify({'erro': str(e)}), 500
     
-    def treinar_modelo(self):
+    @staticmethod
+    def treinar_modelo():
         """
         POST /ml/treinar
         Treina novo modelo de Machine Learning
@@ -67,7 +67,8 @@ class MLController:
             data = request.get_json() or {}
             algoritmo = data.get('algoritmo', 'RandomForest')
             
-            resultado = self.ml_service.treinar_modelo(algoritmo=algoritmo)
+            ml_service = MLService()
+            resultado = ml_service.treinar_modelo(algoritmo=algoritmo)
             
             if 'erro' in resultado:
                 return jsonify(resultado), 400
@@ -77,60 +78,33 @@ class MLController:
         except Exception as e:
             return jsonify({'erro': str(e)}), 500
     
-    def prever(self):
+    @staticmethod
+    def prever(codigo):
         """
         POST /ml/prever
-        Faz predição para uma ou múltiplas ações
-        
-        Body (individual): {"codigo": "PETR4"}
-        Body (lote):       {"codigos": ["PETR4", "VALE3", "ITUB4"]}
+        Faz predição para uma ação
         """
         try:
-            data = request.get_json()
-            if not data:
-                return jsonify({'erro': 'Body JSON é obrigatório'}), 400
+            ml_service = MLService()
+            resultado = ml_service.prever(codigo.upper())
             
-            # Caso 1: Predição individual
-            if 'codigo' in data:
-                codigo = data['codigo']
-                resultado = self.ml_service.prever(codigo.upper())
-                
-                if 'erro' in resultado:
-                    return jsonify(resultado), 404
-                
-                return jsonify(resultado), 200
+            if 'erro' in resultado:
+                return jsonify(resultado), 404
             
-            # Caso 2: Predição em lote
-            elif 'codigos' in data:
-                codigos = data['codigos']
-                if not isinstance(codigos, list):
-                    return jsonify({'erro': '"codigos" deve ser uma lista'}), 400
-                
-                resultados = []
-                for codigo in codigos:
-                    resultado = self.ml_service.prever(codigo.upper())
-                    resultados.append(resultado)
-                
-                return jsonify({
-                    'total': len(codigos),
-                    'predicoes': resultados
-                }), 200
-            
-            else:
-                return jsonify({
-                    'erro': 'Forneça "codigo" (string) ou "codigos" (lista)'
-                }), 400
+            return jsonify(resultado), 200
             
         except Exception as e:
             return jsonify({'erro': str(e)}), 500
     
-    def obter_metricas(self):
+    @staticmethod
+    def obter_metricas():
         """
         GET /ml/metricas
         Retorna métricas do modelo ativo e estatísticas
         """
         try:
-            resultado = self.ml_service.obter_metricas()
+            ml_service = MLService()
+            resultado = ml_service.obter_metricas()
             
             if 'erro' in resultado:
                 return jsonify(resultado), 404

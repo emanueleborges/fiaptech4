@@ -15,6 +15,7 @@ from app.routes.routes import bp as main_bp
 # Importar modelos para criar tabelas
 from app.models.ibov_model import IbovAtivo
 from app.models.dados_refinados_model import DadosRefinados
+from app.models.modelo_treinado_model import ModeloTreinado
 
 
 def create_app():

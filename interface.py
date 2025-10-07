@@ -73,13 +73,33 @@ def fazer_scraping():
         return None, f"❌ Erro inesperado: {str(e)}", None
 
 
+def fazer_scraping_historico():
+    """Chama a API Flask para fazer scraping de 6 meses"""
+    try:
+        response = requests.post(f"{API_BASE}/ibov/scrap-historico", json={}, headers={'Content-Type': 'application/json'})
+        
+        if response.status_code in [200, 201]:
+            data = response.json()
+            mensagem = f"✅ {data.get('mensagem')}\n📅 Dias: {data.get('dias_coletados')}\n📊 Registros: {data.get('total_registros')}\n📈 Média/dia: {data.get('media_por_dia')}\n❌ Erros: {data.get('erros')}"
+            # Carregar dados atualizados
+            df, _, fig = carregar_dados_existentes()
+            return df, mensagem, fig
+        else:
+            return None, f"❌ Erro no scraping histórico: {response.text}", None
+    
+    except requests.exceptions.ConnectionError:
+        return None, "❌ **ERRO**: API Flask não está rodando! Execute `python app.py` primeiro", None
+    except Exception as e:
+        return None, f"❌ Erro inesperado: {str(e)}", None
+
+
 def refinar_dados():
     """Chama a API para refinar dados para ML"""
     try:
-        response = requests.post(f"{API_BASE}/ml/refinar")
-        if response.status_code == 200:
+        response = requests.post(f"{API_BASE}/ml/refinar", json={}, headers={'Content-Type': 'application/json'})
+        if response.status_code in [200, 201]:
             data = response.json()
-            mensagem = f"✅ {data['message']}\n📊 Total de registros: {data['total_registros']}"
+            mensagem = f"✅ {data.get('mensagem', data.get('message', 'Sucesso!'))}\n📊 Total processado: {data.get('total_processado', 0)}\n💾 Total salvos: {data.get('total_salvos', 0)}"
             return mensagem
         else:
             return f"❌ Erro ao refinar dados: {response.text}"
@@ -108,11 +128,11 @@ def listar_dados_refinados():
 def treinar_modelo():
     """Chama a API para treinar modelo ML"""
     try:
-        response = requests.post(f"{API_BASE}/ml/treinar")
-        if response.status_code == 200:
+        response = requests.post(f"{API_BASE}/ml/treinar", json={}, headers={'Content-Type': 'application/json'})
+        if response.status_code in [200, 201]:
             data = response.json()
-            
-            mensagem = f"✅ {data['message']}\n📊 Acurácia: {float(data['acuracia']):.1%}\n🎯 F1-Score: {float(data['f1_score']):.1%}"
+            metricas = data.get('metricas', {})
+            mensagem = f"✅ {data.get('mensagem', 'Modelo treinado!')}\n📊 Acurácia: {float(metricas.get('acuracia', data.get('acuracia', 0)))*100:.1f}%\n🎯 Precision: {float(metricas.get('precision', data.get('precision', 0)))*100:.1f}%\n🔍 Recall: {float(metricas.get('recall', data.get('recall', 0)))*100:.1f}%\n⚖️ F1-Score: {float(metricas.get('f1_score', data.get('f1_score', 0)))*100:.1f}%"
             return mensagem
         else:
             return f"❌ Erro ao treinar modelo: {response.text}"
@@ -123,44 +143,115 @@ def treinar_modelo():
 def fazer_predicoes():
     """Chama a API para fazer predições"""
     try:
-        # Buscar alguns códigos para testar
+        print("DEBUG - Iniciando predições...")
+        
+        # TESTE 1: Verificar se há modelo treinado
+        response_metricas = requests.get(f"{API_BASE}/ml/metricas")
+        if response_metricas.status_code != 200:
+            return None, "❌ Erro: Nenhum modelo treinado. Treine um modelo primeiro!", None
+        
+        # TESTE 2: Buscar alguns códigos para testar
         response_ativos = requests.get(f"{API_BASE}/ibov/ativos")
         if response_ativos.status_code != 200:
             return None, "❌ Erro ao buscar ativos para predição", None
         
-        ativos = response_ativos.json()[:10]  # Pegar apenas 10 para teste
+        ativos = response_ativos.json()[:5]  # Apenas 5 para teste
+        if not ativos:
+            return None, "❌ Nenhum ativo encontrado no banco", None
+            
         codigos = [ativo['codigo'] for ativo in ativos]
+        print(f"DEBUG - Códigos selecionados: {codigos}")
         
-        # Fazer predição
-        response = requests.post(f"{API_BASE}/ml/prever", json={"codigos": codigos})
+        # TESTE 3: Testar primeiro com um código único
+        codigo_teste = codigos[0]
+        print(f"DEBUG - Testando código único: {codigo_teste}")
         
-        if response.status_code == 200:
-            data = response.json()
+        response_unico = requests.post(f"{API_BASE}/ml/prever", 
+                                     json={"codigo": codigo_teste},
+                                     headers={'Content-Type': 'application/json'})
+        
+        print(f"DEBUG - Resposta código único: Status {response_unico.status_code}")
+        print(f"DEBUG - Conteúdo: {response_unico.text}")
+        
+        if response_unico.status_code != 200:
+            return None, f"❌ Erro na predição única: {response_unico.text}", None
+        
+        # TESTE 4: Se código único funciona, testar múltiplos
+        payload = {"codigos": codigos}
+        print(f"DEBUG - Testando múltiplos códigos: {payload}")
+        
+        response = requests.post(f"{API_BASE}/ml/prever", 
+                               json=payload,
+                               headers={'Content-Type': 'application/json'})
+        
+        print(f"DEBUG - Status múltiplos: {response.status_code}")
+        print(f"DEBUG - Resposta múltiplos: {response.text}")
+        
+        if response.status_code != 200:
+            return None, f"❌ Erro em múltiplos códigos: {response.text}", None
+        
+        # TESTE 5: Processar dados de forma super simples
+        data = response.json()
+        print(f"DEBUG - Tipo de data: {type(data)}")
+        print(f"DEBUG - Keys em data: {list(data.keys()) if isinstance(data, dict) else 'Não é dict'}")
+        
+        if 'predicoes' not in data:
+            return None, f"❌ Chave 'predicoes' não encontrada. Keys disponíveis: {list(data.keys())}", None
+        
+        predicoes = data['predicoes']
+        print(f"DEBUG - Número de predições: {len(predicoes)}")
+        print(f"DEBUG - Primeira predição: {predicoes[0] if predicoes else 'Lista vazia'}")
+        
+        # TESTE 6: Criar DataFrame super simples - compatível com Gradio
+        dados_simples = []
+        for i, pred in enumerate(predicoes):
+            print(f"DEBUG - Processando predição {i}: {pred}")
+            print(f"DEBUG - Chaves disponíveis: {list(pred.keys()) if isinstance(pred, dict) else 'Não é dict'}")
             
-            # Converter para DataFrame
-            df = pd.DataFrame([{
-                'Código': pred['codigo'],
-                'Predição': pred['predicao'],
-                'Confiança': f"{float(pred['confianca']):.1%}",
-                'Probabilidade': f"{float(pred['probabilidade']):.3f}",
-                'Status': '🟢' if pred['predicao'] == 'COMPRAR' else '🔴' if pred['predicao'] == 'VENDER' else '🟡'
-            } for pred in data['predicoes']])
+            # Garantir que todos os valores são strings simples para o Gradio
+            codigo = str(pred.get('codigo', 'ERRO'))
+            predicao = str(pred.get('predicao', pred.get('recomendacao', 'ERRO')))
+            confianca = str(pred.get('confianca', 0))
             
-            # Criar gráfico de distribuição das predições
-            pred_counts = df['Predição'].value_counts()
-            fig = px.pie(
-                values=pred_counts.values,
-                names=pred_counts.index,
-                title='Distribuição das Predições'
-            )
-            
-            mensagem = f"🎯 **{data['total']} predições** realizadas com {data['modelo']}"
-            return df, mensagem, fig
+            dados_simples.append({
+                'Codigo': codigo,
+                'Recomendacao': predicao,  # Mudei o nome da coluna
+                'Confianca': confianca
+            })
+        
+        print(f"DEBUG - Dados simples: {dados_simples}")
+        
+        # TESTE 6: Retornar dados como string simples para debug
+        if dados_simples:
+            try:
+                # Primeiro tentar DataFrame normal
+                df_simples = pd.DataFrame(dados_simples)
+                print(f"DEBUG - DataFrame criado com sucesso: {df_simples.head()}")
+                
+                # Garantir que todas as colunas são string
+                for col in df_simples.columns:
+                    df_simples[col] = df_simples[col].astype(str)
+                
+                # Se chegou até aqui, DataFrame está OK
+                return df_simples, f"✅ {len(predicoes)} predições realizadas", None
+                
+            except Exception as df_error:
+                print(f"DEBUG - Erro ao criar DataFrame: {df_error}")
+                
+                # Se DataFrame falhou, retornar como texto simples
+                texto_resultado = "Predições realizadas:\n\n"
+                for i, item in enumerate(dados_simples):
+                    texto_resultado += f"{i+1}. {item['Codigo']}: {item['Recomendacao']} (Confiança: {item['Confianca']}%)\n"
+                
+                return None, texto_resultado, None
         else:
-            return None, f"❌ Erro nas predições: {response.text}", None
-    
+            return None, "❌ Nenhuma predição válida encontrada", None
+        
     except Exception as e:
-        return None, f"❌ Erro: {str(e)}", None
+        error_msg = f"❌ Erro: {str(e)}"
+        print(f"DEBUG - Exceção: {str(e)}")
+        print(f"DEBUG - Tipo do erro: {type(e)}")
+        return None, error_msg, None
 
 
 # Interface Gradio COMPLETA
@@ -171,7 +262,10 @@ with gr.Blocks(title="IBOVESPA + ML - Sistema Completo", theme=gr.themes.Soft())
     with gr.Tab("🔄 Scraping de Dados"):
         gr.Markdown("### Coletar dados do site da B3")
         
-        btn_scrap = gr.Button("🚀 Fazer Scraping", variant="primary", size="lg")
+        with gr.Row():
+            btn_scrap = gr.Button("🚀 Fazer Scraping (Hoje)", variant="secondary", size="lg")
+            btn_scrap_hist = gr.Button("📅 Coletar 6 MESES (RECOMENDADO)", variant="primary", size="lg")
+        
         status_scrap = gr.Textbox(label="Status", interactive=False)
         
         tabela_scrap = gr.Dataframe(
@@ -184,6 +278,11 @@ with gr.Blocks(title="IBOVESPA + ML - Sistema Completo", theme=gr.themes.Soft())
         
         btn_scrap.click(
             fn=fazer_scraping,
+            outputs=[tabela_scrap, status_scrap, grafico_scrap]
+        )
+        
+        btn_scrap_hist.click(
+            fn=fazer_scraping_historico,
             outputs=[tabela_scrap, status_scrap, grafico_scrap]
         )
     
