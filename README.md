@@ -500,7 +500,7 @@ pip install tensorflow==2.15.0 protobuf==3.20.3
 
 ## 👨‍� Autor
 
-**Emanuel Borges**  
+**Emanuel Borges e Rafael Cunha**  
 FIAP - Pós Tech Machine Learning Engineering  
 Tech Challenge - Fase 4
 
