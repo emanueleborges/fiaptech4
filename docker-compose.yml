@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # API Flask com LSTM
+  lstm-api:
+    build: .
+    container_name: fiap-lstm-api
+    ports:
+      - "5000:5000"
+    volumes:
+      # Persistir modelos treinados
+      - ./models:/app/models
+      # Persistir banco de dados
+      - ./instance:/app/instance
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Interface Gradio (opcional)
+  gradio-ui:
+    build: .
+    container_name: fiap-gradio-ui
+    command: python interface_lstm.py
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./models:/app/models
+      - ./instance:/app/instance
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - lstm-api
+    restart: unless-stopped
+
+volumes:
+  models:
+    driver: local
+  instance:
+    driver: local
+
+networks:
+  default:
+    name: fiap-tech-challenge

@@ -1,12 +1,12 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "API IBOVESPA - Sistema de Coleta e Machine Learning",
-    "version": "2.0.0",
-    "description": "API Flask completa para coleta de dados do IBOVESPA, refinamento, treinamento de modelos ML e predições. Desenvolvida para FIAP Tech Challenge - Fase 3.",
+    "title": "API IBOVESPA - Sistema de Coleta, Machine Learning e LSTM",
+    "version": "4.0.0",
+    "description": "API Flask completa para coleta de dados do IBOVESPA (B3) e ações via Yahoo Finance, refinamento, treinamento de modelos ML tradicionais (Random Forest) e LSTM (Deep Learning) para predição de preços de ações. Desenvolvida para FIAP Tech Challenge - Fase 4.",
     "contact": {
       "name": "FIAP Tech Challenge",
-      "url": "https://github.com/emanueleborges/fiaptech3"
+      "url": "https://github.com/emanueleborges/fiaptech4"
     },
     "license": {
       "name": "MIT",
@@ -25,7 +25,15 @@
     },
     {
       "name": "Machine Learning",
-      "description": "Endpoints para refinamento, treinamento e predições ML"
+      "description": "Endpoints para refinamento, treinamento e predições ML (Random Forest)"
+    },
+    {
+      "name": "Stock Data",
+      "description": "Endpoints para coleta de dados históricos de ações via Yahoo Finance"
+    },
+    {
+      "name": "LSTM",
+      "description": "Endpoints para treinamento e predições com LSTM (Deep Learning)"
     },
     {
       "name": "Sistema",
@@ -659,6 +667,614 @@
           },
           "500": {
             "description": "Erro ao obter métricas"
+          }
+        }
+      }
+    },
+    "/stock/coletar": {
+      "post": {
+        "tags": ["Stock Data"],
+        "summary": "Coletar dados históricos de ações via Yahoo Finance",
+        "description": "Coleta dados históricos de uma ação específica do Yahoo Finance (yfinance) e salva no banco de dados SQLite",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "symbol": {
+                  "type": "string",
+                  "example": "PETR4.SA",
+                  "description": "Símbolo da ação (adicione .SA para ações brasileiras)"
+                },
+                "period": {
+                  "type": "string",
+                  "default": "2y",
+                  "enum": ["1mo", "3mo", "6mo", "1y", "2y", "5y", "max"],
+                  "description": "Período de dados históricos"
+                }
+              },
+              "required": ["symbol"]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Dados coletados com sucesso",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "mensagem": {
+                  "type": "string",
+                  "example": "Dados coletados com sucesso para PETR4.SA"
+                },
+                "symbol": {
+                  "type": "string",
+                  "example": "PETR4.SA"
+                },
+                "total_registros": {
+                  "type": "integer",
+                  "example": 504
+                },
+                "periodo": {
+                  "type": "string",
+                  "example": "2024-10-26 a 2025-10-26"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parâmetros inválidos"
+          },
+          "500": {
+            "description": "Erro ao coletar dados"
+          }
+        }
+      }
+    },
+    "/stock/dados/<symbol>": {
+      "get": {
+        "tags": ["Stock Data"],
+        "summary": "Listar dados históricos de uma ação",
+        "description": "Retorna todos os dados históricos salvos para uma ação específica",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "description": "Símbolo da ação (ex: PETR4.SA)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "description": "Número máximo de registros"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dados encontrados",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "symbol": {
+                  "type": "string",
+                  "example": "PETR4.SA"
+                },
+                "total": {
+                  "type": "integer",
+                  "example": 504
+                },
+                "dados": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "date": {
+                        "type": "string",
+                        "format": "date",
+                        "example": "2025-10-26"
+                      },
+                      "open": {
+                        "type": "number",
+                        "example": 38.45
+                      },
+                      "high": {
+                        "type": "number",
+                        "example": 39.12
+                      },
+                      "low": {
+                        "type": "number",
+                        "example": 38.20
+                      },
+                      "close": {
+                        "type": "number",
+                        "example": 38.87
+                      },
+                      "volume": {
+                        "type": "integer",
+                        "example": 12500000
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Dados não encontrados"
+          }
+        }
+      }
+    },
+    "/stock/symbols": {
+      "get": {
+        "tags": ["Stock Data"],
+        "summary": "Listar símbolos disponíveis",
+        "description": "Retorna todos os símbolos de ações que possuem dados históricos salvos",
+        "responses": {
+          "200": {
+            "description": "Lista de símbolos",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "total": {
+                  "type": "integer",
+                  "example": 5
+                },
+                "symbols": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": ["PETR4.SA", "VALE3.SA", "ITUB4.SA"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stock/deletar/<symbol>": {
+      "delete": {
+        "tags": ["Stock Data"],
+        "summary": "Deletar dados de uma ação",
+        "description": "Remove todos os dados históricos de uma ação específica do banco de dados",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "description": "Símbolo da ação a deletar"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dados deletados com sucesso",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "mensagem": {
+                  "type": "string",
+                  "example": "Dados deletados com sucesso"
+                },
+                "registros_deletados": {
+                  "type": "integer",
+                  "example": 504
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Símbolo não encontrado"
+          }
+        }
+      }
+    },
+    "/stock/estatisticas/<symbol>": {
+      "get": {
+        "tags": ["Stock Data"],
+        "summary": "Obter estatísticas de uma ação",
+        "description": "Retorna estatísticas descritivas dos dados históricos (média, mínimo, máximo, desvio padrão)",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "description": "Símbolo da ação"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estatísticas calculadas",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "symbol": {
+                  "type": "string",
+                  "example": "PETR4.SA"
+                },
+                "total_dias": {
+                  "type": "integer",
+                  "example": 504
+                },
+                "periodo": {
+                  "type": "string",
+                  "example": "2024-10-26 a 2025-10-26"
+                },
+                "preco_medio": {
+                  "type": "number",
+                  "example": 38.65
+                },
+                "preco_minimo": {
+                  "type": "number",
+                  "example": 32.10
+                },
+                "preco_maximo": {
+                  "type": "number",
+                  "example": 42.35
+                },
+                "volatilidade": {
+                  "type": "number",
+                  "example": 2.45
+                },
+                "volume_medio": {
+                  "type": "integer",
+                  "example": 15000000
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Dados não encontrados"
+          }
+        }
+      }
+    },
+    "/lstm/treinar": {
+      "post": {
+        "tags": ["LSTM"],
+        "summary": "Treinar modelo LSTM para predição de preços",
+        "description": "Treina um modelo LSTM (Deep Learning) com dados históricos de uma ação para predição de preços futuros. Calcula métricas MAE, RMSE e MAPE.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "symbol": {
+                  "type": "string",
+                  "example": "PETR4.SA",
+                  "description": "Símbolo da ação para treinamento"
+                },
+                "epochs": {
+                  "type": "integer",
+                  "default": 50,
+                  "description": "Número de épocas de treinamento"
+                },
+                "batch_size": {
+                  "type": "integer",
+                  "default": 32,
+                  "description": "Tamanho do batch"
+                },
+                "lstm_units": {
+                  "type": "integer",
+                  "default": 50,
+                  "description": "Número de unidades LSTM por camada"
+                }
+              },
+              "required": ["symbol"]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Modelo LSTM treinado com sucesso",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "mensagem": {
+                  "type": "string",
+                  "example": "Modelo LSTM treinado com sucesso!"
+                },
+                "symbol": {
+                  "type": "string",
+                  "example": "PETR4.SA"
+                },
+                "model_name": {
+                  "type": "string",
+                  "example": "lstm_PETR4_SA_20251026_143022"
+                },
+                "metricas": {
+                  "type": "object",
+                  "properties": {
+                    "mae": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0.856,
+                      "description": "Mean Absolute Error"
+                    },
+                    "rmse": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 1.124,
+                      "description": "Root Mean Square Error"
+                    },
+                    "mape": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 2.31,
+                      "description": "Mean Absolute Percentage Error (%)"
+                    }
+                  }
+                },
+                "training_info": {
+                  "type": "object",
+                  "properties": {
+                    "total_samples": {
+                      "type": "integer",
+                      "example": 504
+                    },
+                    "train_samples": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "test_samples": {
+                      "type": "integer",
+                      "example": 101
+                    },
+                    "epochs": {
+                      "type": "integer",
+                      "example": 50
+                    }
+                  }
+                },
+                "model_path": {
+                  "type": "string",
+                  "example": "models/lstm_PETR4_SA_20251026_143022.h5"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dados insuficientes ou parâmetros inválidos"
+          },
+          "404": {
+            "description": "Símbolo não encontrado"
+          },
+          "500": {
+            "description": "Erro no treinamento"
+          }
+        }
+      }
+    },
+    "/lstm/prever": {
+      "post": {
+        "tags": ["LSTM"],
+        "summary": "Fazer predições com modelo LSTM",
+        "description": "Realiza predições de preços futuros usando modelo LSTM treinado. Pode prever múltiplos dias à frente.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "symbol": {
+                  "type": "string",
+                  "example": "PETR4.SA",
+                  "description": "Símbolo da ação"
+                },
+                "days": {
+                  "type": "integer",
+                  "default": 7,
+                  "description": "Número de dias futuros a prever (1-30)"
+                }
+              },
+              "required": ["symbol"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Predições realizadas com sucesso",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "symbol": {
+                  "type": "string",
+                  "example": "PETR4.SA"
+                },
+                "ultimo_preco_real": {
+                  "type": "number",
+                  "example": 38.87
+                },
+                "predicoes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "dia": {
+                        "type": "integer",
+                        "example": 1
+                      },
+                      "data": {
+                        "type": "string",
+                        "format": "date",
+                        "example": "2025-10-27"
+                      },
+                      "preco_previsto": {
+                        "type": "number",
+                        "example": 39.15
+                      }
+                    }
+                  }
+                },
+                "metricas_modelo": {
+                  "type": "object",
+                  "properties": {
+                    "mae": {
+                      "type": "number",
+                      "example": 0.856
+                    },
+                    "rmse": {
+                      "type": "number",
+                      "example": 1.124
+                    },
+                    "mape": {
+                      "type": "number",
+                      "example": 2.31
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Modelo não encontrado para o símbolo"
+          },
+          "500": {
+            "description": "Erro na predição"
+          }
+        }
+      }
+    },
+    "/lstm/modelos": {
+      "get": {
+        "tags": ["LSTM"],
+        "summary": "Listar modelos LSTM treinados",
+        "description": "Retorna lista de todos os modelos LSTM salvos com suas métricas e informações",
+        "responses": {
+          "200": {
+            "description": "Lista de modelos",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "total": {
+                  "type": "integer",
+                  "example": 3
+                },
+                "modelos": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "integer",
+                        "example": 1
+                      },
+                      "model_name": {
+                        "type": "string",
+                        "example": "lstm_PETR4_SA_20251026_143022"
+                      },
+                      "symbol": {
+                        "type": "string",
+                        "example": "PETR4.SA"
+                      },
+                      "mae": {
+                        "type": "number",
+                        "example": 0.856
+                      },
+                      "rmse": {
+                        "type": "number",
+                        "example": 1.124
+                      },
+                      "mape": {
+                        "type": "number",
+                        "example": 2.31
+                      },
+                      "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2025-10-26T14:30:22Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lstm/modelo/<symbol>": {
+      "get": {
+        "tags": ["LSTM"],
+        "summary": "Obter detalhes de modelo LSTM específico",
+        "description": "Retorna informações detalhadas e métricas do modelo LSTM mais recente para um símbolo",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "description": "Símbolo da ação"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalhes do modelo",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "model_name": {
+                  "type": "string",
+                  "example": "lstm_PETR4_SA_20251026_143022"
+                },
+                "symbol": {
+                  "type": "string",
+                  "example": "PETR4.SA"
+                },
+                "mae": {
+                  "type": "number",
+                  "example": 0.856
+                },
+                "rmse": {
+                  "type": "number",
+                  "example": 1.124
+                },
+                "mape": {
+                  "type": "number",
+                  "example": 2.31
+                },
+                "training_periods": {
+                  "type": "string",
+                  "example": "2024-10-26 a 2025-10-26"
+                },
+                "hyperparameters": {
+                  "type": "object",
+                  "properties": {
+                    "epochs": {
+                      "type": "integer",
+                      "example": 50
+                    },
+                    "batch_size": {
+                      "type": "integer",
+                      "example": 32
+                    },
+                    "lstm_units": {
+                      "type": "integer",
+                      "example": 50
+                    }
+                  }
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Modelo não encontrado"
           }
         }
       }

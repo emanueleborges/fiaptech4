@@ -12,6 +12,10 @@ from app.models.ibov_model import IbovAtivo
 from app.models.dados_refinados_model import DadosRefinados
 from app.models.modelo_treinado_model import ModeloTreinado
 
+# Modelos LSTM - Fase 4
+from app.models.stock_data_model import StockData
+from app.models.lstm_model_info import LSTMModel
+
 
 def create_app():
     app = Flask(__name__)
@@ -24,7 +28,7 @@ def create_app():
     swaggerui_blueprint = get_swaggerui_blueprint(
         SWAGGER_URL,
         API_URL,
-        config={'app_name': "API de Coleta de Dados em Tempo Real"}
+        config={'app_name': "FIAP Tech Challenge Fase 4 - Deep Learning LSTM API"}
     )
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
@@ -34,7 +38,17 @@ def create_app():
 
     @app.route('/')
     def hello():
-        return 'API Flask pronta para coletar dados em tempo real!'
+        return {
+            'mensagem': 'API FIAP Tech Challenge - Fase 4',
+            'projeto': 'Deep Learning - Predição de Preços com LSTM',
+            'status': 'Funcionando',
+            'documentacao': '/swagger',
+            'endpoints_principais': {
+                'lstm_treinar': '/api/lstm/treinar',
+                'lstm_prever': '/api/lstm/prever/<symbol>',
+                'stock_data_coletar': '/api/stock-data/coletar'
+            }
+        }
 
     @app.route('/swagger.json')
     def swagger_json():

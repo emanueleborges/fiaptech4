@@ -1,6 +1,17 @@
 
 from flask import Blueprint, jsonify, request
 from app.controllers.ibov_controller import IbovController
+
+# LSTM imports - desabilitado temporariamente até instalar TensorFlow
+try:
+    from app.controllers.stock_data_controller import StockDataController
+    from app.controllers.lstm_controller import LSTMController
+    LSTM_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  LSTM não disponível: {e}")
+    print("⚠️  Instale TensorFlow: pip install tensorflow==2.15.0")
+    LSTM_AVAILABLE = False
+
 import random
 from datetime import datetime
 
@@ -142,19 +153,103 @@ def obter_metricas():
 
 @bp.route('/', methods=['GET'])
 def status():
+    lstm_status = "✅ Funcionando (Fase 4)" if LSTM_AVAILABLE else "⚠️ TensorFlow não instalado"
     return {
-        "status": "API IBOVESPA funcionando",
-        "version": "1.0",
+        "status": "API FIAP Tech Challenge - Fase 4",
+        "version": "2.0",
+        "projeto": "Deep Learning - Predição de Preços com LSTM",
         "funcionalidades": {
-            "scraping": "✅ Funcionando",
-            "ml": "✅ Funcionando (Real)"
+            "scraping_ibovespa": "✅ Funcionando (Fase 3)",
+            "ml_tradicional": "✅ Funcionando (Fase 3)",
+            "lstm_deep_learning": lstm_status,
+            "yahoo_finance": "✅ Integrado (yfinance)" if LSTM_AVAILABLE else "⚠️ Requer TensorFlow"
         },
         "endpoints": {
-            "scraping": "/ibov/scrap (POST)",
-            "listar": "/ibov/ativos (GET)",
-            "ml_refinar": "/ml/refinar (POST)",
-            "ml_treinar": "/ml/treinar (POST)", 
-            "ml_prever": "/ml/prever (POST)",
-            "swagger": "/swagger"
+            "fase_3": {
+                "scraping": "/ibov/scrap (POST)",
+                "listar": "/ibov/ativos (GET)",
+                "ml_refinar": "/ml/refinar (POST)",
+                "ml_treinar": "/ml/treinar (POST)",
+                "ml_prever": "/ml/prever (POST)"
+            },
+            "fase_4": {
+                "stock_data": {
+                    "coletar": "/api/stock-data/coletar (POST)",
+                    "listar_symbols": "/api/stock-data/symbols (GET)",
+                    "obter_dados": "/api/stock-data/<symbol> (GET)",
+                    "info_empresa": "/api/stock-data/<symbol>/info (GET)",
+                    "deletar": "/api/stock-data/<symbol> (DELETE)"
+                } if LSTM_AVAILABLE else "⚠️ Requer TensorFlow",
+                "lstm": {
+                    "treinar": "/api/lstm/treinar (POST)",
+                    "prever": "/api/lstm/prever/<symbol> (GET)",
+                    "listar_modelos": "/api/lstm/modelos (GET)",
+                    "metricas": "/api/lstm/metricas/<model_name> (GET)"
+                } if LSTM_AVAILABLE else "⚠️ Requer TensorFlow"
+            },
+            "documentacao": "/swagger",
+            "instalacao_tensorflow": "pip install tensorflow==2.15.0 protobuf==3.20.3" if not LSTM_AVAILABLE else None
         }
     }
+
+
+# ========================================
+# ROTAS FASE 4 - LSTM e Stock Data
+# ========================================
+
+if LSTM_AVAILABLE:
+    # Stock Data Routes
+    @bp.route('/api/stock-data/coletar', methods=['POST'])
+    def coletar_dados_stock():
+        """Coleta dados históricos de ações usando yfinance"""
+        return StockDataController.coletar_dados()
+
+    @bp.route('/api/stock-data/symbols', methods=['GET'])
+    def listar_symbols():
+        """Lista todos os símbolos disponíveis"""
+        return StockDataController.listar_symbols()
+
+    @bp.route('/api/stock-data/<symbol>', methods=['GET'])
+    def obter_dados_stock(symbol):
+        """Obtém dados históricos de um símbolo"""
+        return StockDataController.obter_dados(symbol)
+
+    @bp.route('/api/stock-data/<symbol>/info', methods=['GET'])
+    def obter_info_empresa(symbol):
+        """Obtém informações da empresa"""
+        return StockDataController.obter_info_empresa(symbol)
+
+    @bp.route('/api/stock-data/<symbol>', methods=['DELETE'])
+    def deletar_dados_stock(symbol):
+        """Deleta dados de um símbolo"""
+        return StockDataController.deletar_dados(symbol)
+
+    # LSTM Routes
+    @bp.route('/api/lstm/treinar', methods=['POST'])
+    def treinar_lstm():
+        """Treina modelo LSTM para predição de preços"""
+        return LSTMController.treinar_modelo()
+
+    @bp.route('/api/lstm/prever/<symbol>', methods=['GET'])
+    def prever_lstm(symbol):
+        """Faz previsões de preços usando LSTM"""
+        return LSTMController.prever_precos(symbol)
+
+    @bp.route('/api/lstm/modelos', methods=['GET'])
+    def listar_modelos_lstm():
+        """Lista modelos LSTM treinados"""
+        return LSTMController.listar_modelos()
+
+    @bp.route('/api/lstm/metricas/<model_name>', methods=['GET'])
+    def obter_metricas_lstm(model_name):
+        """Obtém métricas de um modelo LSTM"""
+        return LSTMController.obter_metricas(model_name)
+else:
+    # Rotas stub quando LSTM não está disponível
+    @bp.route('/api/stock-data/coletar', methods=['POST'])
+    def coletar_dados_stock():
+        return jsonify({"erro": "TensorFlow não instalado. Execute: pip install tensorflow==2.15.0 protobuf==3.20.3"}), 503
+
+    @bp.route('/api/lstm/treinar', methods=['POST'])
+    def treinar_lstm():
+        return jsonify({"erro": "TensorFlow não instalado. Execute: pip install tensorflow==2.15.0 protobuf==3.20.3"}), 503

@@ -6,8 +6,20 @@ apscheduler==3.10.4
 requests==2.31.0
 beautifulsoup4==4.12.2
 pandas==2.1.1
-gradio==3.50.0
+gradio==4.44.0
 plotly==5.17.0
 scikit-learn==1.3.0
 joblib==1.3.2
 numpy==1.24.3
+
+# Deep Learning - LSTM
+tensorflow==2.15.0
+keras==2.15.0
+yfinance==0.2.32
+
+# Fix protobuf compatibility
+protobuf==3.20.3
+
+# Métricas e visualização
+matplotlib==3.8.0
+seaborn==0.13.0
