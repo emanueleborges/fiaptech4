@@ -15,7 +15,7 @@ numpy==1.24.3
 # Deep Learning - LSTM
 tensorflow==2.15.0
 keras==2.15.0
-yfinance==0.2.32
+yfinance==0.2.66
 
 # Fix protobuf compatibility
 protobuf==3.20.3
