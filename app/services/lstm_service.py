@@ -443,3 +443,4 @@ class LSTMService:
         except Exception as e:
             logger.error(f"Erro ao obter métricas: {e}")
             return {'erro': f'Erro ao obter métricas: {str(e)}'}
+

@@ -708,7 +708,7 @@
               "properties": {
                 "mensagem": {
                   "type": "string",
-                  "example": "Dados coletados com sucesso para PETR4.SA"
+                  "example": "Dados coletados com sucesso e salvos no banco de dados!"
                 },
                 "symbol": {
                   "type": "string",

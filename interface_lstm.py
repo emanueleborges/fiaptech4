@@ -287,8 +287,8 @@ with gr.Blocks(title="FIAP Tech Challenge - Fase 4", theme=gr.themes.Soft()) as 
             gr.Markdown("### Coletar Dados Históricos com Yahoo Finance")
             gr.Markdown("""
 **Exemplos de símbolos:**
-- 🇧🇷 Ações Brasileiras: `PETR4.SA`, `VALE3.SA`, `ITUB4.SA`, `BBDC4.SA`, `ABEV3.SA`
-- 🇺🇸 Ações Americanas: `AAPL`, `GOOGL`, `MSFT`, `TSLA`, `AMZN`
+- 🇧🇷 Ações Brasileiras: `PETR4.SA`, `VALE3.SA`, `ITUB4.SA`, `BBDC4.SA`, `ABEV3.SA`, `BBAS3.SA`, `LREN3.SA`, `MGLU3.SA`, `SUZB3.SA`, `GGBR4.SA`, `WEGE3.SA`, `KLBN11.SA`, `PRIO3.SA`, `CIEL3.SA`, `ELET3.SA`, `CVCB3.SA`, `HAPV3.SA`, `PETR3.SA`, `BRFS3.SA`, `ENBR3.SA`, `RADL3.SA`, `SBSP3.SA`, `TIMS3.SA`, `VIVT3.SA`, `EGIE3.SA`, `MULT3.SA`, `NTCO3.SA`, `SULA11.SA`, `USIM5.SA`, `YDUQ3.SA`
+- 🇺🇸 Ações Americanas: `AAPL`, `GOOGL`, `MSFT`, `TSLA`, `AMZN`, `META`, `NVDA`, `JPM`, `BAC`, `NFLX`, `DIS`, `WMT`, `V`, `MA`, `KO`, `PFE`, `INTC`, `ORCL`, `T`, `XOM`, `CVX`, `BA`, `MCD`, `IBM`, `C`, `GM`, `F`, `GE`, `QCOM`, `SBUX`, `PYPL`, `COST`, `NKE`, `HON`, `ADBE`, `CRM`, `AMD`, `TSM`, `BABA`, `BIDU`, `SNAP`, `UBER`, `LYFT`, `SQ`, `SHOP`, `ZM`, `PLTR`, `RIVN`, `LCID`, `COIN`, `ROKU`, `DOCU`, `TWLO`, `NET`, `DDOG`, `SNOW`, `MDB`, `OKTA`, `TEAM`, `CRWD`, `PANW`, `ZS`, `FSLY`, `ETSY`, `PINS`, `SPOT`, `MELI`, `SE`, `BILI`, `JD`, `PDD`, `TCEHY`, `NTES`, `YUMC`, `VIPS`, `TAL`, `EDU`, `QFIN`, `FUTU`, `TIGR`, `HUYA`, `DOYU`, `YY`, `MOMO`, `QD`, `XPEV`, `LI`, `NIO`, `BYDDF`, `TSLA`
 
 **Dica:** Ações brasileiras precisam do sufixo `.SA`
             """)
@@ -482,7 +482,7 @@ with gr.Blocks(title="FIAP Tech Challenge - Fase 4", theme=gr.themes.Soft()) as 
 
 if __name__ == "__main__":
     app.launch(
-        server_name="0.0.0.0",
+        server_name="127.0.0.1",
         server_port=7860,
         share=False
     )
