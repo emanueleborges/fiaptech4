@@ -1,8 +1,9 @@
 
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, Response
 from flask_swagger_ui import get_swaggerui_blueprint
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 import os
-from app.utils.extensions import db
+from app.utils.extensions import db, metrics
 from app.routes.routes import bp as main_bp
 
 
@@ -13,6 +14,17 @@ from app.models.lstm_model_info import LSTMModel
 
 def create_app():
     app = Flask(__name__)
+    
+    # Inicializa métricas do Prometheus
+    metrics.init_app(app)
+    
+    # Rota Manual de Métricas (Fallback para garantir funcionamento)
+    @app.route('/metrics')
+    def metrics_manual():
+        return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
+    
+    # Informações estáticas da aplicação
+    metrics.info('app_info', 'Application info', version='1.0.0')
     
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///dados.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -60,4 +72,5 @@ if __name__ == '__main__':
     app = create_app()
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    # Host 0.0.0.0 permite acesso externo (necessário para o Prometheus no Docker acessar)
+    app.run(host='0.0.0.0', debug=True)

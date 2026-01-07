@@ -392,8 +392,9 @@ with gr.Blocks(title="FIAP Tech Challenge - Fase 4", theme=gr.themes.Soft()) as 
                         minimum=16,
                         maximum=64,
                         value=32,
-                        step=16
-                    )
+                        step=16,
+                        info="Tamanho do Lote quanto maior = maior processamento de conhecimento de registro de preços"
+                        )
                 
                 with gr.Column():
                     sequence_length_train = gr.Slider(
@@ -410,7 +411,7 @@ with gr.Blocks(title="FIAP Tech Challenge - Fase 4", theme=gr.themes.Soft()) as 
                         maximum=100,
                         value=50,
                         step=25,
-                        info="Neurônios na camada LSTM"
+                        info="Neurônios na camada LSTM = capacidade de processamento da IA"
                     )
                     btn_treinar = gr.Button("🚀 Treinar Modelo", variant="primary", size="lg")
             
