@@ -494,7 +494,7 @@ pip install tensorflow==2.15.0 protobuf==3.20.3
 
 - **Swagger API**: http://localhost:5000/swagger
 - **GitHub**: https://github.com/emanueleborges/fiaptech4
-- **Vídeo Demonstração**: https://www.youtube.com/watch?v=CYEjMDKPmKs
+- **Vídeo Demonstração**: https://www.youtube.com/watch?v=kfuXDKUIZN0
 
 ---
 
