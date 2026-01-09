@@ -29,13 +29,18 @@ fiaptech4/
 │   ├── services/            # Lógica de negócio
 │   │   ├── lstm_service.py          # Serviço LSTM
 │   │   └── stock_data_service.py    # Coleta de dados
-│   └── routes/              # Rotas da API
+│   ├── routes/              # Rotas da API
+│   └── utils/               # Utilitários e extensões
 ├── models/                  # Modelos LSTM salvos (.h5)
 ├── instance/                # Banco de dados SQLite
 ├── app.py                   # Aplicação Flask
-├── interface_lstm.py        # Interface Gradio LSTM
+├── dashboard.json           # Dashboard Grafana (importar para o grafana)
+├── docker-compose.yml       # Orquestração Docker
 ├── Dockerfile               # Container Docker
-└── requirements.txt         # Dependências
+├── interface_lstm.py        # Interface Gradio LSTM
+├── prometheus.yml           # Configuração Prometheus
+├── requirements.txt         # Dependências
+└── swagger.json             # Documentação Swagger
 
 ```
 
@@ -196,13 +201,13 @@ curl http://localhost:5000/api/lstm/prever/PETR4.SA?dias=5
 
 #### **📈 Stock Data (Coleta de Dados)**
 
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| POST | `/api/stock-data/coletar` | Coleta dados do Yahoo Finance |
-| GET | `/api/stock-data/symbols` | Lista símbolos disponíveis |
-| GET | `/api/stock-data/<symbol>` | Obtém dados históricos (query: limit) |
-| GET | `/api/stock-data/<symbol>/info` | Informações da empresa |
-| DELETE | `/api/stock-data/<symbol>` | Deleta dados de um símbolo |
+| Método | Endpoint                        | Descrição                             |
+|--------|---------------------------------|---------------------------------------|
+| POST   | `/api/stock-data/coletar`       | Coleta dados do Yahoo Finance         |
+| GET    | `/api/stock-data/symbols`       | Lista símbolos disponíveis            |
+| GET    | `/api/stock-data/<symbol>`      | Obtém dados históricos (query: limit) |
+| GET    | `/api/stock-data/<symbol>/info` | Informações da empresa                |
+| DELETE | `/api/stock-data/<symbol>`      | Deleta dados de um símbolo            |
 
 **Exemplo de coleta:**
 ```bash
@@ -213,12 +218,12 @@ curl -X POST http://localhost:5000/api/stock-data/coletar \
 
 #### **🧠 LSTM (Deep Learning)**
 
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| POST | `/api/lstm/treinar` | Treina modelo LSTM |
-| GET | `/api/lstm/prever/<symbol>` | Faz previsões (query: dias) |
-| GET | `/api/lstm/modelos` | Lista modelos treinados |
-| GET | `/api/lstm/metricas/<model_name>` | Métricas do modelo |
+| Método | Endpoint                          | Descrição                    |
+|--------|-----------------------------------|------------------------------|
+| POST   | `/api/lstm/treinar`               | Treina modelo LSTM           |
+| GET    | `/api/lstm/prever/<symbol>`       | Faz previsões (query: dias)  |
+| GET    | `/api/lstm/modelos`               | Lista modelos treinados      |
+| GET    | `/api/lstm/metricas/<model_name>` | Métricas do modelo           |
 
 **Exemplo de treinamento:**
 ```bash
@@ -508,7 +513,7 @@ Tech Challenge - Fase 4
 
 ## � Licença
 
-Projeto acadêmico - FIAP 2024/2025
+Projeto acadêmico - FIAP 2025/2026
 
 ---
 
