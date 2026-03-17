@@ -432,7 +432,7 @@ Projeto acadêmico - FIAP 2024
 ## 📞 Suporte
 
 Para dúvidas sobre o projeto:
-- 📧 Email: contato@fiap.com.br
+- 📧 Email: emanuel.eborges@gmail.com
 - 🌐 Swagger: http://localhost:5000/swagger
 
 ---
